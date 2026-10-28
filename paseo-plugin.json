@@ -1,0 +1,11 @@
+{
+  "id": "paseo-direct",
+  "name": "Paseo Direct",
+  "description": "Automatically discover and verify direct connections while your device is in the foreground, with relay fallback.",
+  "icon": "assets/icon.png",
+  "media": ["assets/screenshot.png"],
+  "translations": {
+    "zh-CN": { "name": "Paseo Direct", "description": "前台自动发现并验证 PC 直连，管理本设备的连接偏好，保留 Relay 回退。" }
+  },
+  "requirements": { "paseo": ">=0.13.0 <0.13.3" }
+}
