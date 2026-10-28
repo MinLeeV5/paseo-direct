@@ -1,0 +1,111 @@
+server/discover.ts
+  4a77a73c28f5f4dc 1-26
+README.md
+  4a77a73c28f5f4dc 1-10,12-28,30-88
+assets/icon.svg
+  4a77a73c28f5f4dc 1-6
+client/session.ts
+  4a77a73c28f5f4dc 1-388,391-399,401-422
+client/host-settings.tsx
+  4a77a73c28f5f4dc 1-76
+docs/research/paseo-direct-feasibility.md
+  4a77a73c28f5f4dc 1-186
+server/reports.ts
+  4a77a73c28f5f4dc 1-20
+shared/contracts.ts
+  4a77a73c28f5f4dc 1-51
+CHANGELOG.md
+  4a77a73c28f5f4dc 1-17
+tests/session.test.ts
+  4a77a73c28f5f4dc 1-254
+package.json
+  4a77a73c28f5f4dc 3-19
+server/candidates.ts
+  4a77a73c28f5f4dc 1-57
+client/bridge.ts
+  4a77a73c28f5f4dc 1-180
+client/messages.ts
+  4a77a73c28f5f4dc 1-110
+tests/rpc.test.ts
+  4a77a73c28f5f4dc 1-32
+LICENSE
+  4a77a73c28f5f4dc 1-21
+client/screen.tsx
+  4a77a73c28f5f4dc 1-158
+.github/workflows/check.yml
+  4a77a73c28f5f4dc 1-22
+index.server.ts
+  4a77a73c28f5f4dc 4-11,16-18
+shared/version.ts
+  4a77a73c28f5f4dc 1
+shared/endpoints.ts
+  4a77a73c28f5f4dc 1-54
+client/controls.tsx
+  4a77a73c28f5f4dc 1-37
+client/errors.ts
+  4a77a73c28f5f4dc 1-31
+scripts/verify-daemon.ts
+  4a77a73c28f5f4dc 1-103
+shared/settings.ts
+  4a77a73c28f5f4dc 1-34
+tests/settings.test.ts
+  4a77a73c28f5f4dc 1-88
+client/rpc.ts
+  4a77a73c28f5f4dc 1-26
+scripts/pack.mjs
+  4a77a73c28f5f4dc 1-31
+index.client.tsx
+  4a77a73c28f5f4dc 1-40,43,46-59
+client/use-host-settings.ts
+  4a77a73c28f5f4dc 1-55
+tests/candidates.test.ts
+  4a77a73c28f5f4dc 1-27
+docs/verification.md
+  4a77a73c28f5f4dc 1-78
+client/preferences.ts
+  4a77a73c28f5f4dc 1-62
+OVERVIEW.zh-CN.md
+  4a77a73c28f5f4dc 1-31
+docs/v1-scope.md
+  4a77a73c28f5f4dc 1-15
+scripts/preview-app.mjs
+  4a77a73c28f5f4dc 1-18
+paseo-plugin.json
+  4a77a73c28f5f4dc 3-9
+scripts/reports.ts
+  4a77a73c28f5f4dc 1-17
+tests/bridge.test.ts
+  4a77a73c28f5f4dc 1-130
+docs/releasing.md
+  4a77a73c28f5f4dc 1-31
+OVERVIEW.md
+  4a77a73c28f5f4dc 2,4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.8.2",
+  "base_commit_sha": "c0c6b2bb07911b3800b682f2a6a970318148d76e",
+  "prompts": {
+    "4a77a73c28f5f4dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a182a7-c32c-7393-850f-14f8fb69174d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 3002,
+      "total_deletions": 346,
+      "accepted_lines": 2655,
+      "overriden_lines": 15,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/f9222cfd853767cfe0388f94c955c8339926436440959b3dc47f0e947db59478",
+      "token_usage": {
+        "input_tokens": 481470,
+        "output_tokens": 237420,
+        "cache_read_tokens": 47849600,
+        "cache_creation_tokens": null,
+        "total_cost": null
+      }
+    }
+  }
+}
