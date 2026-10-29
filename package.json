@@ -1,6 +1,6 @@
 {
   "name": "paseo-direct",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Discover, verify and manage foreground direct connections for Paseo",
   "license": "MIT",

@@ -24,7 +24,7 @@ Diagnostics are sent only when you press **Send diagnostics to PC**. They includ
 
 ## Compatibility
 
-Supports Paseo **0.13.0–0.13.2** using a guarded private App connection API. Revalidation is required before upgrading Paseo. Android 0.13.2 has completed the direct → relay → direct Wi-Fi test; iOS still needs device validation.
+Supports Paseo **0.13.0 and later**, with no upper version limit. Required private App connection APIs are checked at runtime; operations stop if they are unavailable. Android 0.13.2 has completed the direct → relay → direct Wi-Fi test; iOS still needs device validation.
 
 Checks run only in the foreground. There is no background service, NAT traversal or automatic IPv6 discovery. Paseo itself handles failure of a saved connection and relay fallback. Plain WebSocket connections follow Paseo’s existing trust model and should be used on trusted LAN / VPN networks; use properly configured TLS on untrusted networks.
 

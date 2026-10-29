@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-10-29
+
+- Support Paseo 0.13.0 and later without an upper version limit in the manifest and connection adapter. Keep runtime capability and PC identity checks.
+- Update English / Simplified Chinese compatibility guidance and add regression coverage for newer versions and the minimum supported version.
+
 ## 1.0.0 — 2026-10-29
 
 - Rename the prototype to Paseo Direct and add English / Simplified Chinese UI.

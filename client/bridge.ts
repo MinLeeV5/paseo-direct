@@ -40,6 +40,14 @@ export async function releaseProbe(probe: VerifiedProbe): Promise<void> {
   await probe.client.close().catch(() => {});
 }
 
+function supportsPaseoVersion(version: string): boolean {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(version);
+  if (!match) return false;
+  const [, major, minor, patch, prerelease] = match;
+  return Number(major) > 0 || Number(minor) > 13 ||
+    (Number(minor) === 13 && (Number(patch) > 0 || !prerelease));
+}
+
 /** The only module that accesses Paseo's private App connection owner. */
 export class PrivateBridge {
   private readonly preferences = new Map<string, DevicePreferenceStore>();
@@ -56,10 +64,9 @@ export class PrivateBridge {
   private host(serverId: string): Host {
     const host = this.store.getHosts().find((value) => value.serverId === serverId);
     if (!host) throw new DirectError("host_missing");
-    const version = this.store.getSnapshot(serverId)?.client?.getLastServerInfoMessage()?.version;
     const info = this.store.getSnapshot(serverId)?.client?.getLastServerInfoMessage();
     if (info && info.serverId !== serverId) throw new DirectError("identity");
-    if (version && !/^0\.13\.[012]$/.test(version)) throw new DirectError("version");
+    if (info?.version && !supportsPaseoVersion(info.version)) throw new DirectError("version");
     return host;
   }
   private prefs(serverId: string): DevicePreferenceStore {

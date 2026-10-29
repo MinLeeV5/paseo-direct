@@ -3,7 +3,7 @@ import test from "node:test";
 import { PrivateBridge, releaseProbe, type PrivateStore, type ProbeClient, type Host } from "../client/bridge";
 
 const candidate = { endpoint: "192.168.1.10:6767", interfaceName: "en0", useTls: false };
-function fixture(serverId = "pc-a") {
+function fixture(serverId = "pc-a", version: string | undefined = "0.13.2") {
   let closed = 0;
   let saves = 0;
   let seenPassword: string | undefined;
@@ -12,11 +12,11 @@ function fixture(serverId = "pc-a") {
   const client: ProbeClient = {
     close: async () => { closed++; }, measureLatency: async () => 3,
     getConnectionState: () => ({ status: "connected" }),
-    getLastServerInfoMessage: () => ({ serverId, version: "0.13.2" }),
+    getLastServerInfoMessage: () => ({ serverId, version }),
   };
   const store: PrivateStore = {
     getHosts: () => [host], getSnapshot: () => ({ activeConnectionId: "relay-a", connectionStatus: "online",
-      client: { ...client, getLastServerInfoMessage: () => ({ serverId: "pc-a", version: "0.13.2" }) } }),
+      client: { ...client, getLastServerInfoMessage: () => ({ serverId: "pc-a", version }) } }),
     subscribe: () => () => {}, controllers: new Map([["pc-a", { activateConnection: async () => {} }]]),
     storage: { getItem: async () => JSON.stringify([{ serverId: "pc-a", password: "test-only-password", connections: host.connections }]), setItem: async () => {} },
     removeConnection: async () => {},
@@ -29,6 +29,35 @@ function fixture(serverId = "pc-a") {
   return { bridge: new PrivateBridge(store), store, client, host,
     counts: () => ({ closed, saves, seenPassword, savedClient }) };
 }
+
+test("Paseo 0.13.0 and later versions can verify and save direct connections without an upper bound", async () => {
+  for (const version of ["0.13.0", "0.13.1", "0.13.2", "0.13.3", "0.13.10", "0.14.0", "0.100.0", "1.0.0", "2.0.0",
+    "0.13.0+build.1", "0.13.1-beta.1", "0.14.0-beta.1", "1.0.0-rc.1+build.1"]) {
+    const f = fixture("pc-a", version);
+    const signal = new AbortController().signal;
+    const probe = await f.bridge.probe("pc-a", candidate, signal);
+    await f.bridge.saveAndActivate("pc-a", probe, signal);
+    assert.equal(f.counts().saves, 1, version);
+    assert.equal(probe.adopted, true, version);
+    assert.equal(f.bridge.status("pc-a").daemonVersion, version);
+  }
+});
+
+test("versions below Paseo 0.13.0 and malformed versions are rejected before connecting", async () => {
+  for (const version of ["0.0.0", "0.9.99", "0.12.99", "0.13.0-beta.1", "0.13.0-rc.1+build.1", "invalid", "0.13", "0.13.3oops", "0.13.0-", "0.13.0+"]) {
+    const f = fixture("pc-a", version);
+    await assert.rejects(f.bridge.probe("pc-a", candidate, new AbortController().signal), /version/, version);
+    assert.equal(f.counts().seenPassword, undefined, version);
+    assert.equal(f.counts().saves, 0, version);
+  }
+});
+
+test("a host without reported version information still uses the capability checks", () => {
+  const f = fixture();
+  const snapshot = f.store.getSnapshot("pc-a")!;
+  f.store.getSnapshot = () => ({ ...snapshot, client: { ...f.client, getLastServerInfoMessage: () => ({ serverId: "pc-a" }) } });
+  assert.equal(f.bridge.status("pc-a").daemonVersion, null);
+});
 
 test("mismatched PC identity closes the socket without modifying the phone registry", async () => {
   const f = fixture("pc-other");

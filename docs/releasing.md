@@ -5,7 +5,7 @@
 ## 构建与验收
 
 1. 使用 Node 22，运行 `npm ci --ignore-scripts`。
-2. 同时更新 `package.json`、`shared/version.ts` 和 `CHANGELOG.md`。更新锁文件；只有重新验证过 Paseo 才扩大 manifest 的兼容范围。
+2. 同时更新 `package.json`、`shared/version.ts` 和 `CHANGELOG.md`，并更新锁文件。manifest 的 Paseo 兼容范围保持为 `>=0.13.0`，连接接口兼容性由运行时能力检查确认。
 3. 运行 `npm run release:pack`，生成 `dist/paseo-direct-<version>.tgz` 和同名 `.sha256`。
 4. 运行 `npm run verify:daemon -- dist/paseo-direct-<version>.tgz`。测试使用独立 daemon，结束时确认清理。
 5. 用支持版本的实际 App 验证设置持久化、前后台、Relay 切换与网络故障回退。记录设备、版本和真实结果，不能用 Web 验收代替 iOS 验收。
@@ -16,7 +16,7 @@
 接收者校验 SHA-256 后，解压分发包并安装其中的目录：
 
 ```sh
-tar -xzf paseo-direct-1.0.0.tgz
+tar -xzf paseo-direct-1.0.1.tgz
 paseo plugin install /absolute/path/to/package
 ```
 

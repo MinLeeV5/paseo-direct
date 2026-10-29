@@ -36,7 +36,7 @@ const en = {
   reason_loopback: "The daemon listens locally. Configure an address that forwards to this PC, or change the daemon listener.",
   reason_no_ipv4: "No eligible network interface was found. Check ignored interfaces or add an address.",
   reason_disabled: "This PC has paused direct discovery.", reason_settings_invalid: "Restore the PC address settings to continue.",
-  privateApi: "Connection adapter for Paseo 0.13.0–0.13.2. Upgrade compatibility must be checked before changing Paseo versions.",
+  privateApi: "Connection adapter for Paseo 0.13.0 and later. Required connection APIs are checked at runtime.",
   cooldown: "Direct checks resume after the relay pause.", retry: "Reconnect / retry", version: "Version", pcVersion: "PC Paseo",
 };
 type Messages = Record<keyof typeof en, string>;
@@ -67,7 +67,7 @@ const zh: Messages = {
   tls: "TLS", plain: "WebSocket", customSource: "补充地址",
   reason_no_tcp: "守护进程未监听 TCP，请配置可访问的补充地址。", reason_loopback: "守护进程只监听本机，请补充转发到此 PC 的地址，或调整监听配置。",
   reason_no_ipv4: "未发现可用网卡，请检查忽略列表或补充地址。", reason_disabled: "此 PC 已暂停提供直连地址。", reason_settings_invalid: "请恢复 PC 地址配置后继续。",
-  privateApi: "连接适配器支持 Paseo 0.13.0–0.13.2。升级 Paseo 前需重新验证兼容性。", cooldown: "Relay 暂停期结束后恢复直连探测。",
+  privateApi: "连接适配器支持 Paseo 0.13.0 及以上版本，运行时检查所需连接接口。", cooldown: "Relay 暂停期结束后恢复直连探测。",
   retry: "重新连接 / 重试", version: "插件版本", pcVersion: "PC Paseo",
 };
 const phases: Record<Phase, [string, string]> = {
@@ -81,7 +81,7 @@ const phases: Record<Phase, [string, string]> = {
 };
 const errors: Record<ErrorCode, [string, string]> = {
   unsupported: ["连接接口不可用，请使用受支持的 Paseo 版本。", "Connection API unavailable. Use a supported Paseo version."],
-  version: ["此版本未经适配，请使用 Paseo 0.13.0–0.13.2。", "Use Paseo 0.13.0–0.13.2 with this adapter."],
+  version: ["请使用 Paseo 0.13.0 及以上版本。", "Use Paseo 0.13.0 or later with this adapter."],
   host_missing: ["当前 PC 已从此设备移除，请重新配对。", "This PC was removed from the device. Pair it again."],
   needs_relay: ["请先为此 PC 保存一个 Relay 连接，以便直连失败时回退。", "Save a relay connection for this PC before enabling direct discovery."],
   identity: ["地址返回了其他 PC 的身份，已停止保存。", "The address belongs to another PC. Nothing was saved."],
