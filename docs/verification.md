@@ -1,5 +1,19 @@
 # Paseo Direct 验证记录
 
+## 1.2.2 · 2026-11-05
+
+修复原生探测与连接交接竞争，以及 Paseo 0.15.0 在“在线 → 在线”替换 client 后，切换 workspace 长期显示“正在更新消息”的同步生命周期问题。具体机制见 [分析记录](research/paseo-reconnect-0.15.md)。
+
+| 验证 | 结果 | 证据与范围 |
+| --- | --- | --- |
+| TypeScript 与行为回归 | 通过，90 项测试 | 新增旧探测误关闭、异步交接串行保护、取消及失败唤醒、TLS 与偏好变更保护、手动选择幂等、保存中重载的归属，以及消息同步 owner 初始化、client 替换与订阅清理 |
+| 官方原版控制器 | 通过 | 使用官方 v0.13.0、v0.13.2、v0.15.0 控制器与对应连接选择代码；验证可写探测槽、旧 client 异步关闭期间不启动探测、新连接保留、完成后恢复原生探测；v0.15.0 另覆盖取消与 ping 失败 |
+| 官方原版消息同步 | 通过 | 使用 v0.15.0 同步函数及 SessionProvider 的两个原版 effect 表达式，按 React 依赖比较和清理顺序执行。原实现替换 client 后停在 pending、不发送新请求；实际兼容代码使其新增订阅并恢复 ready，释放后订阅数为零 |
+| 分发包干净安装 | 通过 | 独立 Paseo 0.15.0 编译归档中的客户端与服务端；设置重载保留、带密码转发请求身份一致、错误密码拒绝；验证进程正常退出并清理 |
+| 本机上游链路采样 | 通过 | 连续 20 次真实转发请求身份一致，耗时约 23–27ms；不代表手机 Wi-Fi 稳定性或修复后的真机验收 |
+
+实际手机持续前台使用、反复切换 workspace 的修复后验收尚待用户确认。升级后需要完全退出并重开手机 Paseo，以重建升级前已经卡住的同步 owner。原始证据保存在忽略目录中的 `native-probe-race.json`、`native-handoff-fixed.json`、`native-handoff-lease-review.json`、`native-timeline-client-replacement-review.json` 与 `intermittent-link-probe.json`。
+
 ## 1.2.1 · 2026-11-05
 
 修复旧常驻 supervisor 的 `paseo.pid` 缺少 `serverId` 时，插件虽显示 `running`，但地址发现持续失败、页面与中继管理无法初始化的问题。兼容分支按 daemon 的规则读取显式身份覆盖或同一目录的 `server-id`，继续核对当前主机身份。

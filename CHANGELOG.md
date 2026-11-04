@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 — 2026-11-05
+
+- Prevent stale native connection probes from replacing a newly verified direct or forwarded connection. Serialize handoff through the native probe slot, including asynchronous disposal of the previous connection, and recheck device preferences before activation.
+- Keep native message synchronization connected when a connection replacement remains online. This addresses Paseo 0.15.0 leaving a new timeline owner disconnected and showing “Updating messages” after switching workspaces.
+- Verify manual relay selection before replacing the active connection, preserve already working selections, and retain address ownership when a native connection change unloads the plugin during save.
+- Include the plugin version in manually submitted diagnostics. Restart the client app once after upgrading to recreate any timeline owner that was already stuck.
+
 ## 1.2.1 — 2026-11-05
 
 - Fix discovery with a long-running legacy supervisor whose `paseo.pid` omits `serverId`. Validate the runtime home using the daemon's explicit identity override or persisted `server-id`, so plugin initialization and forwarding management can proceed after a Paseo upgrade.

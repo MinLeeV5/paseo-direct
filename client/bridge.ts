@@ -2,12 +2,14 @@ import type { Candidate } from "../shared/contracts";
 import type { DevicePreferences, ManagedConnection } from "../shared/settings";
 import { DevicePreferenceStore, type PreferenceStorage } from "./preferences";
 import { bounded, DirectError, ensureActive } from "./errors";
+import { installTimelineConnectionSync } from "./timeline";
 
 export interface Connection { id: string; type: string; endpoint?: string; useTls?: boolean; originServerId?: string }
 export interface Host { serverId: string; label: string; password?: string; connections: Connection[] }
 export interface ProbeClient {
   close(): Promise<void>;
   measureLatency(options: { timeoutMs: number }): Promise<number>;
+  livenessPing?(options: { timeoutMs: number }): Promise<number>;
   getConnectionState(): { status: string };
   getLastServerInfoMessage(): { serverId: string; version?: string } | null;
   invokePluginRpc?(pluginId: string, method: string, input: unknown): Promise<unknown>;
@@ -16,13 +18,22 @@ export interface RuntimeSnapshot {
   activeConnectionId: string | null; connectionStatus: string; client: ProbeClient | null;
   probeByConnectionId?: Map<string, { status: string; latencyMs: number | null }>;
 }
+export interface RuntimeController {
+  activateConnection(input: { connectionId: string; existingClient?: ProbeClient }): Promise<void>;
+  runProbeCycleNow?(): Promise<void>;
+  probeCycleInFlight?: Promise<void> | null;
+}
+interface HandoffController extends RuntimeController {
+  runProbeCycleNow(): Promise<void>;
+  probeCycleInFlight: Promise<void> | null;
+}
 export interface PrivateStore {
   getHosts(): Host[];
   getSnapshot(serverId: string): RuntimeSnapshot | null;
   subscribe(serverId: string, listener: () => void): () => void;
   subscribeAll?(listener: () => void): () => void;
   deps: { connectToDaemon(input: { host: Host; connection: Connection; timeoutMs: number }): Promise<{ client: ProbeClient; serverId: string }> };
-  controllers: Map<string, { activateConnection(input: { connectionId: string; existingClient?: ProbeClient }): Promise<void> }>;
+  controllers: Map<string, RuntimeController>;
   storage: PreferenceStorage;
   upsertDirectConnection(input: { serverId: string; endpoint: string; useTls: boolean; existingClient?: ProbeClient }): Promise<unknown>;
   removeConnection(serverId: string, connectionId: string): Promise<void>;
@@ -64,6 +75,7 @@ export class PrivateBridge {
       typeof store.removeConnection !== "function" || typeof store.deps?.connectToDaemon !== "function" ||
       typeof store.controllers?.get !== "function" || typeof store.storage?.getItem !== "function" ||
       typeof store.storage?.setItem !== "function") throw new DirectError("unsupported");
+    installTimelineConnectionSync(store);
   }
   static fromGlobal(): PrivateBridge {
     return new PrivateBridge(Reflect.get(globalThis, "__paseoHostRuntimeStore") as PrivateStore);
@@ -81,6 +93,13 @@ export class PrivateBridge {
     let value = this.preferences.get(serverId);
     if (!value) { value = new DevicePreferenceStore(this.store.storage, serverId); this.preferences.set(serverId, value); }
     return value;
+  }
+  private handoffController(serverId: string): HandoffController {
+    const controller = this.store.controllers.get(serverId);
+    const slot = controller && Object.getOwnPropertyDescriptor(controller, "probeCycleInFlight");
+    if (typeof controller?.activateConnection !== "function" || typeof controller.runProbeCycleNow !== "function" ||
+      !slot?.writable || (slot.value !== null && typeof slot.value?.then !== "function")) throw new DirectError("unsupported");
+    return controller as HandoffController;
   }
   readPreferences(serverId: string, mobile: boolean) { return this.prefs(serverId).read(mobile); }
   writePreferences(serverId: string, values: DevicePreferences): Promise<void> { return this.prefs(serverId).write(values); }
@@ -166,7 +185,8 @@ export class PrivateBridge {
     finally { signal.removeEventListener("abort", abort); }
   }
 
-  async save(serverId: string, probe: VerifiedProbe, signal: AbortSignal, activate: boolean): Promise<{ added: boolean }> {
+  async save(serverId: string, probe: VerifiedProbe, signal: AbortSignal, activate: boolean, timeoutMs = 3000,
+    beforeCommit?: () => Promise<void>): Promise<{ added: boolean }> {
     ensureActive(signal);
     if (probe.closed) throw new DirectError("cancelled");
     const host = this.host(serverId);
@@ -175,11 +195,15 @@ export class PrivateBridge {
     if (probe.client.getConnectionState().status !== "connected") throw new DirectError("unreachable");
     const existing = host.connections.find((c) => c.type === "directTcp" && c.endpoint === probe.candidate.endpoint);
     if (existing && (existing.useTls ?? false) !== probe.candidate.useTls) throw new DirectError("connection_conflict");
+    if (activate) this.handoffController(serverId);
     probe.handingOff = activate;
     try {
-      await this.store.upsertDirectConnection({ serverId, endpoint: probe.candidate.endpoint, useTls: probe.candidate.useTls,
-        ...(activate ? { existingClient: probe.client } : {}) });
-      probe.adopted = activate;
+      // upsert starts native probes without awaiting them. Passing the socket here
+      // lets an older unavailable result immediately replace the fresh connection.
+      await this.store.upsertDirectConnection({ serverId, endpoint: probe.candidate.endpoint, useTls: probe.candidate.useTls });
+      if (activate) await this.adoptConnection(serverId, existing ? { ...existing } : {
+        id: connectionId(probe.candidate), type: "directTcp", endpoint: probe.candidate.endpoint, useTls: probe.candidate.useTls,
+      }, probe, signal, { timeoutMs, beforeCommit });
       return { added: !existing };
     } catch (error) {
       probe.adopted = this.store.getSnapshot(serverId)?.client === probe.client;
@@ -209,14 +233,24 @@ export class PrivateBridge {
     this.host(originServerId);
     if (this.store.getSnapshot(originServerId)?.connectionStatus !== "online") throw new DirectError("discovery");
     if (!this.store.getHosts().some((host) => host.serverId === serverId)) throw new DirectError("route_missing");
-    const connection = this.host(serverId).connections.find((row) => row.type === "routed" && row.originServerId === originServerId);
+    const host = this.host(serverId);
+    const connection = host.connections.find((row) => row.type === "routed" && row.originServerId === originServerId);
     if (!connection) throw new DirectError("route_missing");
-    const controller = this.store.controllers.get(serverId);
-    if (typeof controller?.activateConnection !== "function") throw new DirectError("unsupported");
-    await controller.activateConnection({ connectionId: connection.id });
-    const snapshot = this.store.getSnapshot(serverId);
-    if (snapshot?.client?.getLastServerInfoMessage()?.serverId !== serverId) throw new DirectError("identity");
-    if (snapshot.connectionStatus !== "online" || snapshot.activeConnectionId !== connection.id) throw new DirectError("unreachable");
+    this.handoffController(serverId);
+    const current = this.store.getSnapshot(serverId);
+    if (current?.activeConnectionId === connection.id && current.connectionStatus === "online" &&
+      current.client?.getConnectionState().status === "connected") return;
+    const origin = this.store.getSnapshot(originServerId)?.client;
+    const guard = () => {
+      if (!origin || this.store.getSnapshot(originServerId)?.client !== origin ||
+        this.store.getSnapshot(originServerId)?.connectionStatus !== "online" || origin.getConnectionState().status !== "connected")
+        throw new DirectError("unreachable");
+    };
+    guard();
+    const signal = new AbortController().signal;
+    const verified = await this.verifyConnection(host, { ...connection }, signal, 6000);
+    try { await this.adoptConnection(serverId, { ...connection }, verified, signal, { timeoutMs: 6000, guard }); }
+    finally { await releaseProbe(verified); }
   }
 
   originIsDirect(serverId: string): boolean {
@@ -251,28 +285,68 @@ export class PrivateBridge {
     }
     const verified = await this.verifyConnection(host, connection, signal, timeoutMs);
     try {
-      await beforeCommit?.();
-      originUnchanged();
-      await this.adoptConnection(serverId, connection, verified, signal);
+      await this.adoptConnection(serverId, connection, verified, signal, {
+        timeoutMs, beforeCommit: async () => { await beforeCommit?.(); originUnchanged(); },
+        guard: originUnchanged,
+      });
       originUnchanged();
     } finally { await releaseProbe(verified); }
   }
 
-  private async adoptConnection(serverId: string, connection: Connection, verified: VerifiedTransport, signal: AbortSignal): Promise<void> {
+  private async adoptConnection(serverId: string, connection: Connection, verified: VerifiedTransport, signal: AbortSignal,
+    options: { timeoutMs: number; beforeCommit?: () => Promise<void>; guard?: () => void; shouldAdopt?: () => boolean }): Promise<void> {
     ensureActive(signal);
-    if (!this.host(serverId).connections.some((c) => c.id === connection.id)) throw new DirectError("route_missing");
-    const controller = this.store.controllers.get(serverId);
-    if (typeof controller?.activateConnection !== "function") throw new DirectError("unsupported");
-    verified.handingOff = true;
-    try {
-      await controller.activateConnection({ connectionId: connection.id, existingClient: verified.client });
-    } finally {
-      verified.adopted = this.store.getSnapshot(serverId)?.client === verified.client;
-      verified.handingOff = false;
+    const controller = this.handoffController(serverId);
+    const deadline = Date.now() + 20_000;
+    await bounded(controller.runProbeCycleNow(), signal, 20_000);
+    // Reserve the core's existing probe serialization slot. This also covers
+    // activateConnection awaiting asynchronous disposal of its previous client.
+    while (controller.probeCycleInFlight !== null) {
+      await bounded(controller.probeCycleInFlight, signal, Math.max(1, deadline - Date.now()));
     }
-    const snapshot = this.store.getSnapshot(serverId);
-    if (snapshot?.client?.getLastServerInfoMessage()?.serverId !== serverId) throw new DirectError("identity");
-    if (snapshot.connectionStatus !== "online" || snapshot.activeConnectionId !== connection.id) throw new DirectError("unreachable");
+    ensureActive(signal);
+    let release!: () => void;
+    const lease = new Promise<void>((resolve) => { release = resolve; });
+    controller.probeCycleInFlight = lease;
+    const needed = () => {
+      ensureActive(signal);
+      options.guard?.();
+      if (this.store.controllers.get(serverId) !== controller) throw new DirectError("cancelled");
+      const saved = this.host(serverId).connections.find((c) => c.id === connection.id);
+      if (!saved) throw new DirectError("route_missing");
+      if (saved.type !== connection.type || saved.endpoint !== connection.endpoint ||
+        (saved.useTls ?? false) !== (connection.useTls ?? false) || saved.originServerId !== connection.originServerId)
+        throw new DirectError("connection_conflict");
+      const active = this.store.getSnapshot(serverId);
+      return options.shouldAdopt?.() !== false && !(active?.activeConnectionId === connection.id &&
+        active.connectionStatus === "online" && active.client?.getConnectionState().status === "connected");
+    };
+    try {
+      if (!needed()) return;
+      // The core's active probe reads getLastLivenessRttMs, which measureLatency
+      // does not populate. Prime it on the unowned socket before handing it over.
+      verified.latencyMs = await bounded(typeof verified.client.livenessPing === "function"
+        ? verified.client.livenessPing({ timeoutMs: options.timeoutMs })
+        : verified.client.measureLatency({ timeoutMs: options.timeoutMs }), signal, options.timeoutMs + 250);
+      await options.beforeCommit?.();
+      if (!needed()) return;
+      if (!Number.isFinite(verified.latencyMs) || verified.latencyMs < 0 || verified.closed ||
+        verified.client.getConnectionState().status !== "connected") throw new DirectError("unreachable");
+      if (verified.client.getLastServerInfoMessage()?.serverId !== serverId) throw new DirectError("identity");
+      verified.handingOff = true;
+      try {
+        await controller.activateConnection({ connectionId: connection.id, existingClient: verified.client });
+      } finally {
+        verified.adopted = this.store.getSnapshot(serverId)?.client === verified.client;
+        verified.handingOff = false;
+      }
+      const snapshot = this.store.getSnapshot(serverId);
+      if (snapshot?.client?.getLastServerInfoMessage()?.serverId !== serverId) throw new DirectError("identity");
+      if (snapshot.connectionStatus !== "online" || snapshot.activeConnectionId !== connection.id) throw new DirectError("unreachable");
+    } finally {
+      if (controller.probeCycleInFlight === lease) controller.probeCycleInFlight = null;
+      release();
+    }
   }
 
   /** Return to a verified saved non-routed path, reusing native credentials and socket handoff. */
@@ -317,7 +391,9 @@ export class PrivateBridge {
         if (fatal?.status === "rejected") throw fatal.reason;
         throw new DirectError("unreachable");
       }
-      if (needsRestore()) await this.adoptConnection(serverId, winner.connection, winner.verified, signal);
+      if (needsRestore()) await this.adoptConnection(serverId, winner.connection, winner.verified, signal, {
+        timeoutMs, shouldAdopt: needsRestore,
+      });
       return true;
     } finally {
       scope.abort(); signal.removeEventListener("abort", abort);

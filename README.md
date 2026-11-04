@@ -4,21 +4,23 @@ Paseo 的前台直连与主机中继管理插件。手机自动获取 PC 地址�
 
 ![Paseo Direct](assets/screenshot.png)
 
-**版本 1.2.1，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
+**版本 1.2.2，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
 
 ## 安装
 
 在需要直连或充当中继的 PC 上，先启用 Paseo 插件功能并完成手机的 Relay 配对，再安装此版本：
 
 ```sh
-paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.1
+paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.2
 ```
 
 已通过 Git 安装旧版的 B 可直接升级：
 
 ```sh
-paseo plugin update paseo-direct --ref v1.2.1
+paseo plugin update paseo-direct --ref v1.2.2
 ```
+
+升级到 1.2.2 后，请将手机 Paseo 完全退出并重新打开一次，以重建可能卡住的消息同步状态。重连与切换 workspace 后“正在更新消息”的排查和修复见 [分析记录](docs/research/paseo-reconnect-0.15.md)。
 
 也可从本地源码目录安装：
 
@@ -32,7 +34,7 @@ paseo plugin install /absolute/path/to/paseo-direct
 paseo plugin reload paseo-direct
 ```
 
-分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.1)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
+分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.2)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
 
 ## 使用
 
@@ -82,7 +84,7 @@ paseo plugin logs paseo-direct
 npm ci --ignore-scripts
 npm run verify
 npm run release:pack
-npm run verify:daemon -- dist/paseo-direct-1.2.1.tgz
+npm run verify:daemon -- dist/paseo-direct-1.2.2.tgz
 ```
 
 `verify` 运行类型检查和连接行为回归。干净安装验证创建独立临时 daemon，测试分发包在无 `node_modules` 时的编译、RPC、PC 设置、身份与绑定端口，并用第二个带密码的临时 daemon 验证主机转发、错误密码拒绝与清理；不会重启当前使用中的 daemon，也不会调用模型。CI 生成分发包及 SHA-256 校验文件。

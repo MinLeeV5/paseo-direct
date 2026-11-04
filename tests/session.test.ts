@@ -4,6 +4,7 @@ import { DirectSession, type Bridge } from "../client/session";
 import type { ConnectionStatus, VerifiedProbe } from "../client/bridge";
 import type { Discovery } from "../shared/contracts";
 import { DevicePreferenceStore } from "../client/preferences";
+import { DirectError } from "../client/errors";
 
 let nextId = 0;
 function fixture(foreground = true) {
@@ -253,6 +254,22 @@ test("ownership metadata finishes even when a successful handoff unloads the plu
   } finally { first.dispose(); second?.dispose(); }
 });
 
+test("a native connection choice that unloads the plugin during save still records ownership of the persisted address", async () => {
+  const f = fixture(), session = f.create();
+  const save = f.bridge.save;
+  f.bridge.save = async (...args) => {
+    await save(...args);
+    args[1].adopted = false; // Native selected its own socket after the address was saved.
+    session.dispose();
+    throw new DirectError("cancelled");
+  };
+  try {
+    await session.start();
+    assert.equal((await f.preferences.read(true)).values.managed[0]?.endpoint, f.discovery.candidates[0].endpoint);
+    assert.equal(f.counts().closed, 1, "the unused plugin probe is still released");
+  } finally { session.dispose(); }
+});
+
 test("A's direct discovery respects a preferred forwarding origin, retaining native addresses without activating them", async () => {
   const f = fixture();
   await f.preferences.update(true, (values) => ({ ...values, preferredOriginServerId: "pc-b" }));
@@ -287,4 +304,25 @@ test("a relay preference saved during an in-flight direct probe prevents that pr
     assert.equal(f.counts().closed, 1);
     assert.equal(session.getSnapshot().connection?.type, "relay");
   } finally { session.dispose(); }
+});
+
+test("a relay preference saved while native handoff is waiting also prevents direct activation", async () => {
+  const f = fixture(); let entered!: () => void, finish!: () => void;
+  const waiting = new Promise<void>((resolve) => { entered = resolve; });
+  const native = new Promise<void>((resolve) => { finish = resolve; });
+  const save = f.bridge.save;
+  f.bridge.save = async (...args) => {
+    entered(); await native;
+    const beforeCommit = (args as unknown[])[5];
+    if (typeof beforeCommit === "function") await beforeCommit();
+    return save(...args);
+  };
+  const session = f.create();
+  try {
+    const starting = session.start(); await waiting;
+    await f.preferences.update(true, (values) => ({ ...values, preferredOriginServerId: "B" }));
+    finish(); await starting;
+    assert.equal(f.counts().saves, 0);
+    assert.equal(session.getSnapshot().connection?.type, "relay");
+  } finally { finish(); session.dispose(); }
 });

@@ -32,6 +32,7 @@ export const reportSchema = z.object({
   platform: z.enum(["ios", "android", "web"]),
   serverId: z.string().min(1),
   at: z.number(),
+  pluginVersion: z.string().max(40).optional(),
   foreground: z.boolean(),
   stage: z.string().max(160),
   bridgeReady: z.boolean(),

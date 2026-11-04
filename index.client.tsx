@@ -6,6 +6,7 @@ import { DirectScreen } from "./client/screen";
 import { discoverRpc, reportRpc, type ClientReport } from "./shared/contracts";
 import { CurrentHostRpc } from "./client/rpc";
 import { preferredRoutes, type PreferredRoutes } from "./client/routing";
+import { VERSION } from "./shared/version";
 
 const DEVICE_KEY = "__paseoDirectDeviceV1";
 function deviceId(): string {
@@ -19,7 +20,7 @@ function deviceId(): string {
 function reportFrom(state: SessionState): ClientReport {
   return {
     deviceId: deviceId(), platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web",
-    serverId: state.serverId!, at: Date.now(), foreground: state.foreground, stage: state.stage,
+    serverId: state.serverId!, pluginVersion: VERSION, at: Date.now(), foreground: state.foreground, stage: state.stage,
     bridgeReady: state.bridgeReady, activeType: state.connection?.type ?? null,
     activeEndpoint: state.connection?.endpoint ?? null, connectionStatus: state.connection?.status ?? null,
     relaySaved: state.connection?.relaySaved ?? false, savedEndpoints: state.connection?.directSaved ?? [],

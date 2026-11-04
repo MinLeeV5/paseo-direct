@@ -1,6 +1,6 @@
 {
   "name": "paseo-direct",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "type": "module",
   "description": "Discover verified direct connections and configure host forwarding for Paseo",
   "license": "MIT",
@@ -8,7 +8,7 @@
   "homepage": "https://github.com/MinLeeV5/paseo-direct#readme",
   "bugs": { "url": "https://github.com/MinLeeV5/paseo-direct/issues" },
   "keywords": ["paseo", "paseo-plugin", "direct-connection", "host-forwarding", "vpn", "lan"],
-  "files": ["paseo-plugin.json", "index.client.tsx", "index.server.ts", "client/", "server/", "shared/", "assets/", "OVERVIEW.md", "OVERVIEW.zh-CN.md", "CHANGELOG.md", "LICENSE", "docs/releasing.md", "docs/verification.md", "docs/forwarding.md", "docs/research/paseo-direct-feasibility.md"],
+  "files": ["paseo-plugin.json", "index.client.tsx", "index.server.ts", "client/", "server/", "shared/", "assets/", "OVERVIEW.md", "OVERVIEW.zh-CN.md", "CHANGELOG.md", "LICENSE", "docs/releasing.md", "docs/verification.md", "docs/forwarding.md", "docs/research/paseo-direct-feasibility.md", "docs/research/paseo-reconnect-0.15.md"],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",

@@ -22,7 +22,7 @@ await mkdir(join(root, "dist"), { recursive: true });
 const { stdout } = await exec("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", "dist"], { cwd: root });
 const [packed] = JSON.parse(stdout);
 for (const entry of packed.files) {
-  assert(/^(package\.json|README\.md|LICENSE|CHANGELOG\.md|OVERVIEW(?:\.zh-CN)?\.md|paseo-plugin\.json|index\.(?:client\.tsx|server\.ts)|docs\/(?:releasing|verification|forwarding|research\/paseo-direct-feasibility)\.md|(?:client|server|shared|assets)\/[^.].*)$/.test(entry.path), `Unexpected release file: ${entry.path}`);
+  assert(/^(package\.json|README\.md|LICENSE|CHANGELOG\.md|OVERVIEW(?:\.zh-CN)?\.md|paseo-plugin\.json|index\.(?:client\.tsx|server\.ts)|docs\/(?:releasing|verification|forwarding|research\/paseo-(?:direct-feasibility|reconnect-0\.15))\.md|(?:client|server|shared|assets)\/[^.].*)$/.test(entry.path), `Unexpected release file: ${entry.path}`);
   assert(!/node_modules|\.env|credential|test-results|\.map$/.test(entry.path), `Unexpected private/development file: ${entry.path}`);
 }
 const filename = packed.filename;

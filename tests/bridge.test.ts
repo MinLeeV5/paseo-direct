@@ -14,19 +14,29 @@ function fixture(serverId = "pc-a", version: string | undefined = "0.13.2") {
     getConnectionState: () => ({ status: "connected" }),
     getLastServerInfoMessage: () => ({ serverId, version }),
   };
+  let snapshot: RuntimeSnapshot = { activeConnectionId: "relay-a", connectionStatus: "online",
+    client: { ...client, getLastServerInfoMessage: () => ({ serverId: "pc-a", version }) } };
+  const controller = {
+    probeCycleInFlight: null as Promise<void> | null,
+    runProbeCycleNow: async () => {},
+    activateConnection: async ({ connectionId, existingClient }: { connectionId: string; existingClient?: ProbeClient }) => {
+      savedClient = existingClient;
+      snapshot = { ...snapshot, activeConnectionId: connectionId, connectionStatus: "online", client: existingClient ?? client };
+    },
+  };
   const store: PrivateStore = {
-    getHosts: () => [host], getSnapshot: () => ({ activeConnectionId: "relay-a", connectionStatus: "online",
-      client: { ...client, getLastServerInfoMessage: () => ({ serverId: "pc-a", version }) } }),
-    subscribe: () => () => {}, controllers: new Map([["pc-a", { activateConnection: async () => {} }]]),
+    getHosts: () => [host], getSnapshot: () => snapshot,
+    subscribe: () => () => {}, controllers: new Map([["pc-a", controller]]),
     storage: { getItem: async () => JSON.stringify([{ serverId: "pc-a", password: "test-only-password", connections: host.connections }]), setItem: async () => {} },
     removeConnection: async () => {},
     deps: { connectToDaemon: async (input) => { seenPassword = input.host.password; return { client, serverId }; } },
     upsertDirectConnection: async (input) => {
       saves++; savedClient = input.existingClient;
       host.connections.push({ id: `direct:${input.endpoint}`, type: "directTcp", endpoint: input.endpoint });
+      if (input.existingClient) await controller.activateConnection({ connectionId: `direct:${input.endpoint}`, existingClient: input.existingClient });
     },
   };
-  return { bridge: new PrivateBridge(store), store, client, host,
+  return { bridge: new PrivateBridge(store), store, client, host, controller,
     counts: () => ({ closed, saves, seenPassword, savedClient }) };
 }
 
@@ -138,12 +148,139 @@ test("handoff owns a socket while the private save is still pending", async () =
   const f = fixture(); let finish!: () => void;
   const scope = new AbortController();
   const probe = await f.bridge.probe("pc-a", candidate, scope.signal);
-  f.store.upsertDirectConnection = () => new Promise<void>((r) => { finish = r; });
+  const upsert = f.store.upsertDirectConnection;
+  f.store.upsertDirectConnection = async (input) => {
+    await new Promise<void>((r) => { finish = r; });
+    return upsert(input);
+  };
   const saving = f.bridge.save("pc-a", probe, scope.signal, true);
   await releaseProbe(probe);
   assert.equal(f.counts().closed, 0);
   finish(); await saving; await releaseProbe(probe);
   assert.equal(f.counts().closed, 0);
+});
+
+test("a late native probe cannot close a newly verified direct connection", async () => {
+  const f = fixture();
+  let finish!: () => void, started!: () => void;
+  const nativeWait = new Promise<void>((resolve) => { finish = resolve; });
+  const nativeStarted = new Promise<void>((resolve) => { started = resolve; });
+  let nativeCycle = Promise.resolve();
+  const upsert = f.store.upsertDirectConnection;
+  f.store.upsertDirectConnection = async (input) => {
+    await upsert(input);
+    // Paseo's updateHost starts probing before its upsert returns. This cycle
+    // still holds an unavailable result for the previous direct connection.
+    nativeCycle = nativeWait.then(async () => {
+      if (f.store.getSnapshot("pc-a")?.client === f.client) {
+        await f.client.close();
+        await f.controller.activateConnection({ connectionId: "relay-a" });
+      }
+    });
+    started();
+  };
+  f.controller.runProbeCycleNow = () => nativeCycle;
+  const signal = new AbortController().signal;
+  const probe = await f.bridge.probe("pc-a", candidate, signal);
+  const saving = f.bridge.saveAndActivate("pc-a", probe, signal);
+  await nativeStarted;
+  finish(); await nativeCycle; await saving;
+  assert.equal(f.counts().closed, 0, "the old native result must finish before the new socket is adopted");
+  assert.equal(f.store.getSnapshot("pc-a")?.activeConnectionId, `direct:${candidate.endpoint}`);
+  assert.equal(f.store.getSnapshot("pc-a")?.client, probe.client);
+});
+
+test("handoff primes Paseo's liveness sample without changing ordinary latency probes", async () => {
+  const f = fixture(); let samples = 0;
+  Object.assign(f.client, { livenessPing: async () => { samples++; return 4; } });
+  const signal = new AbortController().signal;
+  const probe = await f.bridge.probe("pc-a", candidate, signal);
+  assert.equal(samples, 0);
+  await f.bridge.saveAndActivate("pc-a", probe, signal);
+  assert.equal(samples, 1, "measureLatency alone leaves native active-probe liveness unset");
+  assert.equal(probe.latencyMs, 4);
+  await releaseProbe(probe);
+});
+
+test("cancelling while native probes finish never adopts the waiting socket", async () => {
+  const f = fixture(); let entered!: () => void, finish!: () => void;
+  const waiting = new Promise<void>((resolve) => { entered = resolve; });
+  const native = new Promise<void>((resolve) => { finish = resolve; });
+  f.controller.runProbeCycleNow = () => { entered(); return native; };
+  const scope = new AbortController();
+  const probe = await f.bridge.probe("pc-a", candidate, scope.signal);
+  const saving = f.bridge.saveAndActivate("pc-a", probe, scope.signal);
+  // Race the barrier with the operation so the regression fails without hanging.
+  await Promise.race([waiting, saving]); scope.abort(); finish();
+  await assert.rejects(saving, /cancelled/);
+  await releaseProbe(probe);
+  assert.equal(f.store.getSnapshot("pc-a")?.activeConnectionId, "relay-a");
+  assert.equal(f.counts().closed, 1);
+});
+
+test("a probe disconnected during the native barrier is released without replacing the active connection", async () => {
+  const f = fixture(); let connected = true;
+  f.client.getConnectionState = () => ({ status: connected ? "connected" : "disconnected" });
+  f.controller.runProbeCycleNow = async () => { connected = false; };
+  const signal = new AbortController().signal;
+  const probe = await f.bridge.probe("pc-a", candidate, signal);
+  await assert.rejects(f.bridge.saveAndActivate("pc-a", probe, signal), /unreachable/);
+  await releaseProbe(probe);
+  assert.equal(f.store.getSnapshot("pc-a")?.activeConnectionId, "relay-a");
+  assert.equal(f.counts().closed, 1);
+});
+
+test("native probes stay serialized throughout asynchronous socket adoption", async () => {
+  const f = fixture(); let handingOff = false, overlappingProbes = 0;
+  f.controller.runProbeCycleNow = () => {
+    if (f.controller.probeCycleInFlight) return f.controller.probeCycleInFlight;
+    if (handingOff) overlappingProbes++;
+    return Promise.resolve();
+  };
+  const activate = f.controller.activateConnection;
+  f.controller.activateConnection = async (input) => {
+    handingOff = true;
+    // Native activateConnection awaits the previous client's owned.close().
+    // A periodic tick may arrive while that asynchronous disposal is pending.
+    void f.controller.runProbeCycleNow();
+    await new Promise((resolve) => setImmediate(resolve));
+    await activate(input); handingOff = false;
+  };
+  const signal = new AbortController().signal;
+  const probe = await f.bridge.probe("pc-a", candidate, signal);
+  await f.bridge.saveAndActivate("pc-a", probe, signal);
+  assert.equal(overlappingProbes, 0);
+  assert.equal(f.controller.probeCycleInFlight, null, "the native probe slot is released after handoff");
+});
+
+test("a failed handoff releases the native slot and wakes periodic probe waiters", async () => {
+  const f = fixture(); let waiter: Promise<void> | undefined;
+  f.controller.runProbeCycleNow = () => f.controller.probeCycleInFlight ?? Promise.resolve();
+  f.controller.activateConnection = async () => {
+    waiter = f.controller.runProbeCycleNow();
+    throw new Error("activation failed");
+  };
+  const signal = new AbortController().signal;
+  const probe = await f.bridge.probe("pc-a", candidate, signal);
+  await assert.rejects(f.bridge.saveAndActivate("pc-a", probe, signal), /activation failed/);
+  await waiter;
+  assert.equal(f.controller.probeCycleInFlight, null);
+  assert.equal(f.store.getSnapshot("pc-a")?.activeConnectionId, "relay-a");
+  await releaseProbe(probe);
+  assert.equal(f.counts().closed, 1);
+});
+
+test("an unsupported native probe slot fails before saving an address", async () => {
+  for (const writable of [true, false]) {
+    const f = fixture();
+    if (writable) Reflect.deleteProperty(f.controller, "probeCycleInFlight");
+    else Object.defineProperty(f.controller, "probeCycleInFlight", { value: null, writable: false });
+    const signal = new AbortController().signal;
+    const probe = await f.bridge.probe("pc-a", candidate, signal);
+    await assert.rejects(f.bridge.saveAndActivate("pc-a", probe, signal), /unsupported/);
+    assert.equal(f.counts().saves, 0);
+    await releaseProbe(probe);
+  }
 });
 
 test("RPC resolves the active client anew after relay/direct replacement", async () => {
@@ -165,16 +302,21 @@ function routedFixture() {
     { id: "via:pc-a", type: "routed", originServerId: "pc-a" },
   ] };
   const originSnapshot = f.store.getSnapshot("pc-a")!;
-  let targetSnapshot = { ...originSnapshot, activeConnectionId: "via:other", client: {
+  let targetSnapshot: RuntimeSnapshot = { ...originSnapshot, activeConnectionId: "via:other", client: {
     ...f.client, getLastServerInfoMessage: () => ({ serverId: "target", version: "0.13.2" }),
   } };
   const activations: string[] = [];
+  const targetClient: ProbeClient = { ...f.client,
+    getLastServerInfoMessage: () => ({ serverId: "target", version: "0.15.0" }),
+  };
+  f.store.deps.connectToDaemon = async () => ({ client: targetClient, serverId: "target" });
   f.store.getHosts = () => [f.host, target];
   f.store.getSnapshot = (id) => id === "target" ? targetSnapshot : originSnapshot;
-  f.store.controllers.set("target", { activateConnection: async ({ connectionId }) => {
-    activations.push(connectionId); targetSnapshot = { ...targetSnapshot, activeConnectionId: connectionId };
-  } });
-  return { ...f, target, activations, setSnapshot: (value: Partial<typeof targetSnapshot>) => { targetSnapshot = { ...targetSnapshot, ...value }; } };
+  const targetController = { ...f.controller, activateConnection: async ({ connectionId, existingClient }: { connectionId: string; existingClient?: ProbeClient }) => {
+    activations.push(connectionId); targetSnapshot = { ...targetSnapshot, activeConnectionId: connectionId, client: existingClient ?? targetSnapshot.client };
+  } };
+  f.store.controllers.set("target", targetController);
+  return { ...f, target, activations, targetController, setSnapshot: (value: Partial<typeof targetSnapshot>) => { targetSnapshot = { ...targetSnapshot, ...value }; } };
 }
 
 test("using B as a relay selects only the target's route through B, without adding direct addresses or needing a target relay", async () => {
@@ -203,13 +345,52 @@ test("route activation must confirm the target identity and selected route after
   await assert.rejects(f.bridge.activateForwardedHost("pc-a", "target"), /identity/);
   assert.deepEqual(f.activations, []);
   const next = routedFixture();
-  next.store.controllers.set("target", { activateConnection: async () => {
+  next.store.controllers.set("target", { ...next.targetController, activateConnection: async () => {
     next.setSnapshot({ client: { ...next.client, getLastServerInfoMessage: () => ({ serverId: "impostor", version: "0.13.2" }) } });
   } });
   await assert.rejects(next.bridge.activateForwardedHost("pc-a", "target"), /identity/);
   const offline = routedFixture();
   offline.setSnapshot({ connectionStatus: "offline" });
   await assert.rejects(offline.bridge.activateForwardedHost("pc-a", "target"), /unreachable/);
+});
+
+test("manual relay activation waits for native probes before handing over the connection", async () => {
+  const f = routedFixture(); let finish!: () => void;
+  const native = new Promise<void>((resolve) => { finish = resolve; });
+  f.targetController.runProbeCycleNow = () => native;
+  const activating = f.bridge.activateForwardedHost("pc-a", "target");
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(f.activations, [], "a stale native cycle must finish first");
+  } finally { finish(); await activating; }
+  assert.deepEqual(f.activations, ["via:pc-a"]);
+});
+
+test("using an already active relay preserves the target's working socket", async () => {
+  const f = routedFixture();
+  await f.bridge.activateForwardedHost("pc-a", "target");
+  await f.bridge.activateForwardedHost("pc-a", "target");
+  assert.deepEqual(f.activations, ["via:pc-a"]);
+});
+
+test("a failed manual relay probe preserves the target's current connection", async () => {
+  const f = routedFixture();
+  f.store.deps.connectToDaemon = async () => { throw new Error("transport unavailable"); };
+  await assert.rejects(f.bridge.activateForwardedHost("pc-a", "target"), /transport unavailable/);
+  assert.deepEqual(f.activations, []);
+  assert.equal(f.store.getSnapshot("target")?.activeConnectionId, "via:other");
+});
+
+test("handoff refuses a TLS choice that changed while native probes were pending", async () => {
+  const f = fixture();
+  f.controller.runProbeCycleNow = async () => {
+    f.host.connections = f.host.connections.map((connection) => connection.type === "directTcp" ? { ...connection, useTls: true } : connection);
+  };
+  const signal = new AbortController().signal;
+  const probe = await f.bridge.probe("pc-a", candidate, signal);
+  await assert.rejects(f.bridge.saveAndActivate("pc-a", probe, signal), /connection_conflict/);
+  await releaseProbe(probe);
+  assert.equal(f.store.getSnapshot("pc-a")?.activeConnectionId, "relay-a");
 });
 
 function automaticFixture() {
@@ -229,7 +410,7 @@ function automaticFixture() {
   f.store.deps.connectToDaemon = async ({ connection }) => {
     connects.push(connection.id); return { client: makeClient(), serverId: "target" };
   };
-  f.store.controllers.set("target", { activateConnection: async ({ connectionId, existingClient }) => {
+  f.store.controllers.set("target", { ...f.controller, activateConnection: async ({ connectionId, existingClient }) => {
     assert(existingClient, "automatic switching must adopt a verified socket");
     activations.push(connectionId);
     target = { ...target, activeConnectionId: connectionId, connectionStatus: "online", client: existingClient };

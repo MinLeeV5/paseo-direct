@@ -22,7 +22,8 @@ export interface Bridge {
   status(serverId: string): ConnectionStatus;
   subscribe(serverId: string, listener: () => void): () => void;
   probe(serverId: string, candidate: Candidate, signal: AbortSignal, timeoutMs?: number): Promise<VerifiedProbe>;
-  save(serverId: string, probe: VerifiedProbe, signal: AbortSignal, activate: boolean): Promise<{ added: boolean }>;
+  save(serverId: string, probe: VerifiedProbe, signal: AbortSignal, activate: boolean, timeoutMs?: number,
+    beforeCommit?: () => Promise<void>): Promise<{ added: boolean }>;
   persisted(serverId: string, endpoint: string, useTls?: boolean): Promise<boolean>;
   activateRelay(serverId: string): Promise<void>;
   readPreferences(serverId: string, mobile: boolean): Promise<{ values: DevicePreferences; warning: "storage" | "preferences_invalid" | null; fresh: boolean }>;
@@ -346,15 +347,29 @@ export class DirectSession {
       this.log("verified", probe.candidate.endpoint);
       this.phase("switching");
       this.patch({ lastSavedEndpoint: probe.candidate.endpoint, persisted: false });
-      const saved = await bridge.save(serverId, probe, scope.signal, activate);
-      // Finish metadata persistence even if handing over the socket reinstalls the client plugin.
-      if (saved.added) {
+      const alreadySaved = bridge.status(serverId).directSaved.includes(probe.candidate.endpoint);
+      const rememberManaged = async () => {
         const preferences = await bridge.updatePreferences(serverId, this.options.mobile, (values) => ({
           ...values, managed: [...values.managed.filter((item) => item.endpoint !== probe.candidate.endpoint),
             { endpoint: probe.candidate.endpoint, useTls: probe.candidate.useTls, addedAt: this.now() }].slice(-64),
         }));
         this.patch({ preferences, enabled: preferences.enabled });
+      };
+      let saved: { added: boolean };
+      try {
+        saved = await bridge.save(serverId, probe, scope.signal, activate, this.state.preferences.timeoutSeconds * 1000, async () => {
+          const current = await bounded(bridge.readPreferences(serverId, this.options.mobile), scope.signal, 4000);
+          if (current.warning) throw new DirectError(current.warning);
+          if (!selectedEndpoint && (!current.values.enabled || !current.values.preferDirect ||
+            current.values.preferredOriginServerId || current.values.relayPauseUntil > this.now())) throw new DirectError("cancelled");
+        });
+      } catch (error) {
+        // A native choice may reload this plugin after upsert persisted the new
+        // address but before the pending handoff returns. Retain its ownership.
+        if (!alreadySaved && await bridge.persisted(serverId, probe.candidate.endpoint, probe.candidate.useTls)) await rememberManaged();
+        throw error;
       }
+      if (saved.added) await rememberManaged();
       if (!this.current()) return;
       const persisted = await bridge.persisted(serverId, probe.candidate.endpoint, probe.candidate.useTls);
       this.patch({ persisted });

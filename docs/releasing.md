@@ -16,7 +16,7 @@
 接收者校验 SHA-256 后，解压分发包并安装其中的目录：
 
 ```sh
-tar -xzf paseo-direct-1.2.1.tgz
+tar -xzf paseo-direct-1.2.2.tgz
 paseo plugin install /absolute/path/to/package
 ```
 
