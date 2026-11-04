@@ -1,6 +1,6 @@
 export type ErrorCode = "unsupported" | "version" | "host_missing" | "needs_relay" | "identity" |
   "cancelled" | "timeout" | "unreachable" | "authentication" | "connection_conflict" |
-  "storage" | "preferences_invalid" | "discovery" | "active_connection" | "not_managed";
+  "storage" | "preferences_invalid" | "discovery" | "active_connection" | "not_managed" | "route_missing";
 
 export class DirectError extends Error {
   constructor(readonly code: ErrorCode) { super(code); this.name = "DirectError"; }

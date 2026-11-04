@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-11-04
+
+- Add a host-forwarding section to use a Paseo PC as a VPN relay for other hosts. Manage native target registrations and explicitly select the app's route through that PC.
+- Keep target credentials in the relay PC's native host registry. Exclude connection URIs and transport errors from plugin responses, preserve existing registrations, and limit removal to plugin-owned targets.
+- Extend clean-install verification with a separate authenticated target daemon and requests routed through the relay PC.
+
 ## 1.0.1 — 2026-10-29
 
 - Support Paseo 0.13.0 and later without an upper version limit in the manifest and connection adapter. Keep runtime capability and PC identity checks.

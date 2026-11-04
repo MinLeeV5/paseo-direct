@@ -16,6 +16,12 @@ The PC must expose a TCP endpoint reachable from your device. The plugin reads t
 
 Device preferences persist separately for each PC. Shared PC settings support ignored interfaces and additional DNS, IPv4, IPv6 or TLS WebSocket addresses. Automatic interface discovery uses IPv4.
 
+## Use a PC as a relay
+
+Open **Use this PC as a relay** on a VPN-connected Paseo PC and save a target address reachable from that PC. Your phone can connect to the relay PC over the LAN and use **Use this relay** to select the target's forwarded connection, without joining the VPN itself. The target PC does not need this plugin.
+
+Target connections and any target Paseo password are stored by the relay PC's native host registry and shared with clients authorized to use that PC. Only targets added by this plugin can be removed here; disabling the plugin leaves native targets saved. Host forwarding requires compatible host and App capabilities.
+
 ## Data access
 
 The plugin reads PC network interfaces and the daemon’s runtime listener. On the device it uses Paseo’s existing authentication in memory, manages direct connections through the App, and saves preferences in its own local storage namespace. Existing passwords and pairing credentials are excluded from plugin settings and diagnostics.

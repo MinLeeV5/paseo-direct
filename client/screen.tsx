@@ -5,6 +5,7 @@ import { ScrollView, SettingsCard, SettingsSelect, SettingsSwitch } from "@getpa
 import type { DirectSession } from "./session";
 import { Action, Fold, styles } from "./controls";
 import { HostSettings } from "./host-settings";
+import { HostForwarding } from "./forwarding";
 import { messages } from "./messages";
 import { VERSION } from "../shared/version";
 import type { CurrentHostRpc } from "./rpc";
@@ -14,6 +15,7 @@ export function DirectScreen({ theme, session, rpc, settings = false }: Props) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [deviceOpen, setDeviceOpen] = useState(false);
   const [pcOpen, setPcOpen] = useState(false);
+  const [forwardingOpen, setForwardingOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const locale = session.locale();
@@ -128,6 +130,11 @@ export function DirectScreen({ theme, session, rpc, settings = false }: Props) {
       <HostSettings theme={theme} locale={locale} rpc={rpc} foreground={state.foreground}
         connectionKey={`${state.serverId}:${active?.connectionId}:${active?.status}`}
         onSaved={() => { void session.refreshDiscovery(); }} />
+    </Fold>
+    <Fold theme={theme} title={m.forwarding} open={forwardingOpen} onToggle={() => setForwardingOpen(!forwardingOpen)}>
+      {state.serverId && <HostForwarding theme={theme} locale={locale} rpc={rpc} serverId={state.serverId}
+        foreground={state.foreground} direct={active?.type === "directTcp" || active?.type === "directSocket"}
+        connectionKey={`${state.serverId}:${active?.connectionId}:${active?.status}`} />}
     </Fold>
     <Fold theme={theme} title={m.diagnostics} open={diagnosticsOpen} onToggle={() => setDiagnosticsOpen(!diagnosticsOpen)}>
       <Text style={s.muted}>{state.foreground ? m.foreground : m.background}</Text>

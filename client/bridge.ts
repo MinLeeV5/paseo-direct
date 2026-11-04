@@ -3,7 +3,7 @@ import type { DevicePreferences, ManagedConnection } from "../shared/settings";
 import { DevicePreferenceStore, type PreferenceStorage } from "./preferences";
 import { bounded, DirectError, ensureActive } from "./errors";
 
-export interface Connection { id: string; type: string; endpoint?: string; useTls?: boolean }
+export interface Connection { id: string; type: string; endpoint?: string; useTls?: boolean; originServerId?: string }
 export interface Host { serverId: string; label: string; password?: string; connections: Connection[] }
 export interface ProbeClient {
   close(): Promise<void>;
@@ -175,6 +175,20 @@ export class PrivateBridge {
     const controller = this.store.controllers.get(serverId);
     if (!relay || typeof controller?.activateConnection !== "function") throw new DirectError("needs_relay");
     await controller.activateConnection({ connectionId: relay.id });
+  }
+  async activateForwardedHost(originServerId: string, serverId: string): Promise<void> {
+    if (originServerId === serverId) throw new DirectError("identity");
+    this.host(originServerId);
+    if (this.store.getSnapshot(originServerId)?.connectionStatus !== "online") throw new DirectError("discovery");
+    if (!this.store.getHosts().some((host) => host.serverId === serverId)) throw new DirectError("route_missing");
+    const connection = this.host(serverId).connections.find((row) => row.type === "routed" && row.originServerId === originServerId);
+    if (!connection) throw new DirectError("route_missing");
+    const controller = this.store.controllers.get(serverId);
+    if (typeof controller?.activateConnection !== "function") throw new DirectError("unsupported");
+    await controller.activateConnection({ connectionId: connection.id });
+    const snapshot = this.store.getSnapshot(serverId);
+    if (snapshot?.client?.getLastServerInfoMessage()?.serverId !== serverId) throw new DirectError("identity");
+    if (snapshot.connectionStatus !== "online" || snapshot.activeConnectionId !== connection.id) throw new DirectError("unreachable");
   }
   async removeManaged(serverId: string, managed: ManagedConnection): Promise<void> {
     const host = this.host(serverId);

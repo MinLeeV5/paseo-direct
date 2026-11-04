@@ -157,3 +157,57 @@ test("RPC resolves the active client anew after relay/direct replacement", async
   f.store.getSnapshot = () => ({ ...snapshot, connectionStatus: "offline" });
   await assert.rejects(f.bridge.invoke("pc-a", "direct.discover", {}), /discovery/);
 });
+
+function routedFixture() {
+  const f = fixture();
+  const target: Host = { serverId: "target", label: "Target", connections: [
+    { id: "via:other", type: "routed", originServerId: "other" },
+    { id: "via:pc-a", type: "routed", originServerId: "pc-a" },
+  ] };
+  const originSnapshot = f.store.getSnapshot("pc-a")!;
+  let targetSnapshot = { ...originSnapshot, activeConnectionId: "via:other", client: {
+    ...f.client, getLastServerInfoMessage: () => ({ serverId: "target", version: "0.13.2" }),
+  } };
+  const activations: string[] = [];
+  f.store.getHosts = () => [f.host, target];
+  f.store.getSnapshot = (id) => id === "target" ? targetSnapshot : originSnapshot;
+  f.store.controllers.set("target", { activateConnection: async ({ connectionId }) => {
+    activations.push(connectionId); targetSnapshot = { ...targetSnapshot, activeConnectionId: connectionId };
+  } });
+  return { ...f, target, activations, setSnapshot: (value: Partial<typeof targetSnapshot>) => { targetSnapshot = { ...targetSnapshot, ...value }; } };
+}
+
+test("using B as a relay selects only the target's route through B, without adding direct addresses or needing a target relay", async () => {
+  const f = routedFixture();
+  await f.bridge.activateForwardedHost("pc-a", "target");
+  assert.deepEqual(f.activations, ["via:pc-a"]);
+  assert.equal(f.counts().saves, 0);
+  assert.equal(f.target.connections.length, 2);
+});
+
+test("route activation rejects undiscovered targets, wrong origins, unavailable adapters and self routing", async () => {
+  const f = routedFixture();
+  await assert.rejects(f.bridge.activateForwardedHost("pc-a", "missing"), /route_missing/);
+  f.target.connections = f.target.connections.slice(0, 1);
+  await assert.rejects(f.bridge.activateForwardedHost("pc-a", "target"), /route_missing/);
+  await assert.rejects(f.bridge.activateForwardedHost("pc-a", "pc-a"), /identity/);
+  assert.deepEqual(f.activations, []);
+  f.target.connections.push({ id: "via:pc-a", type: "routed", originServerId: "pc-a" });
+  f.store.controllers.delete("target");
+  await assert.rejects(f.bridge.activateForwardedHost("pc-a", "target"), /unsupported/);
+});
+
+test("route activation must confirm the target identity and selected route after the core operation", async () => {
+  const f = routedFixture();
+  f.setSnapshot({ client: { ...f.client, getLastServerInfoMessage: () => ({ serverId: "impostor", version: "0.13.2" }) } });
+  await assert.rejects(f.bridge.activateForwardedHost("pc-a", "target"), /identity/);
+  assert.deepEqual(f.activations, []);
+  const next = routedFixture();
+  next.store.controllers.set("target", { activateConnection: async () => {
+    next.setSnapshot({ client: { ...next.client, getLastServerInfoMessage: () => ({ serverId: "impostor", version: "0.13.2" }) } });
+  } });
+  await assert.rejects(next.bridge.activateForwardedHost("pc-a", "target"), /identity/);
+  const offline = routedFixture();
+  offline.setSnapshot({ connectionStatus: "offline" });
+  await assert.rejects(offline.bridge.activateForwardedHost("pc-a", "target"), /unreachable/);
+});

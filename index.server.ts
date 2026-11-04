@@ -2,6 +2,7 @@ import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { discoverRpc } from "./shared/contracts";
 import { discover } from "./server/discover";
 import { registerReports } from "./server/reports";
+import { registerForwarding } from "./server/forwarding";
 import { hostPreferences } from "./shared/settings";
 import { hostValuesSchema } from "./shared/settings";
 
@@ -16,5 +17,6 @@ export default function contribute(server: PluginServerContext) {
     return discover(input, context, current.values);
   });
   registerReports(server);
+  registerForwarding(server);
   return () => {};
 }
