@@ -26,7 +26,7 @@ function fixture() {
   } };
   return { manager: new ForwardingManager(), api, hosts, connections, removed };
 }
-const input = (values = {}) => forwardingInputSchema.parse({ address: "10.23.11.104:16767", ...values });
+const input = (values = {}) => forwardingInputSchema.parse({ address: "192.0.2.42:16767", ...values });
 
 test("B stores the target through the native host API, while directory and action responses exclude credentials and transport errors", async () => {
   const f = fixture();
@@ -51,13 +51,13 @@ test("equivalent and simultaneous target submissions are idempotent and preserve
   const f = fixture();
   const results = await Promise.all([
     f.manager.add(f.api, input({ password: "original" })),
-    f.manager.add(f.api, input({ address: "ws://10.23.11.104:16767", password: "replacement" })),
+    f.manager.add(f.api, input({ address: "ws://192.0.2.42:16767", password: "replacement" })),
     f.manager.add(f.api, input()),
   ]);
   assert.deepEqual(results.map((result) => result.code), ["saved", "exists", "exists"]);
   assert.equal(f.connections.length, 1);
   assert.equal(new URL(f.connections[0]).searchParams.get("password"), "original");
-  assert.equal((await f.manager.add(f.api, input({ address: "wss://10.23.11.104:16767" }))).code, "saved");
+  assert.equal((await f.manager.add(f.api, input({ address: "wss://192.0.2.42:16767" }))).code, "saved");
 });
 
 test("manual registrations cannot be listed or removed by the forwarding manager", async () => {
@@ -88,7 +88,7 @@ test("failed target mutations mask transport details and do not poison later cha
 
 test("invalid forwarding addresses never register a target and concurrent additions respect the host limit", async () => {
   const f = fixture();
-  for (const address of ["ws://user:password@target:16767", "10.23.11.104:16767?password=secret", "0.0.0.0:6767", "127.0.0.1:6767"]) {
+  for (const address of ["ws://user:password@target:16767", "192.0.2.42:16767?password=secret", "0.0.0.0:6767", "127.0.0.1:6767"]) {
     assert.equal(forwardingInputSchema.safeParse({ address }).success, false);
   }
   const results = await Promise.all(Array.from({ length: 17 }, (_, index) =>

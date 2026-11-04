@@ -4,20 +4,20 @@ Paseo 的前台直连与主机中继管理插件。手机自动获取 PC 地址�
 
 ![Paseo Direct](assets/screenshot.png)
 
-**版本 1.2.0，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
+**版本 1.2.1，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
 
 ## 安装
 
 在需要直连或充当中继的 PC 上，先启用 Paseo 插件功能并完成手机的 Relay 配对，再安装此版本：
 
 ```sh
-paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.0
+paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.1
 ```
 
-已通过 Git 安装 1.1.0 的 B 可直接升级：
+已通过 Git 安装旧版的 B 可直接升级：
 
 ```sh
-paseo plugin update paseo-direct --ref v1.2.0
+paseo plugin update paseo-direct --ref v1.2.1
 ```
 
 也可从本地源码目录安装：
@@ -32,7 +32,7 @@ paseo plugin install /absolute/path/to/paseo-direct
 paseo plugin reload paseo-direct
 ```
 
-分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.0)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
+分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.1)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
 
 ## 使用
 
@@ -52,7 +52,7 @@ paseo plugin reload paseo-direct
 
 ## 通过另一台 PC 中继
 
-当 B 已运行 Paseo 且登录 VPN，手机可先直连 B，再经 B 访问只有 VPN 内可达的 A。在 **B 的 Paseo Direct → 通过此 PC 中继** 中保存 A 的映射地址（例如 `10.23.11.104:16767`），按需单独填写 A 的 Paseo 密码。等待 B 连接成功，开启目标的 **自动优先此中继**，再在侧边栏选择 A；也可点击“使用此中继”仅手动切换一次。
+当 B 已运行 Paseo 且登录 VPN，手机可先直连 B，再经 B 访问只有 VPN 内可达的 A。在 **B 的 Paseo Direct → 通过此 PC 中继** 中保存 A 的映射地址（例如 `192.0.2.42:16767`），按需单独填写 A 的 Paseo 密码。等待 B 连接成功，开启目标的 **自动优先此中继**，再在侧边栏选择 A；也可点击“使用此中继”仅手动切换一次。
 
 主机转发自 1.1.0 提供，自动优先与回退自 1.2.0 提供，复用 Paseo 的主机转发，不需要手机登录 VPN 或在 B 上另开代理端口。目标由 B 的原生主机配置持久保存并向获准使用 B 的客户端共享；自动优先来源按手机与目标保存，一个目标只选择一个来源。完整配置步骤见 [VPN 电脑中继说明](docs/forwarding.md)。
 
@@ -82,7 +82,7 @@ paseo plugin logs paseo-direct
 npm ci --ignore-scripts
 npm run verify
 npm run release:pack
-npm run verify:daemon -- dist/paseo-direct-1.2.0.tgz
+npm run verify:daemon -- dist/paseo-direct-1.2.1.tgz
 ```
 
 `verify` 运行类型检查和连接行为回归。干净安装验证创建独立临时 daemon，测试分发包在无 `node_modules` 时的编译、RPC、PC 设置、身份与绑定端口，并用第二个带密码的临时 daemon 验证主机转发、错误密码拒绝与清理；不会重启当前使用中的 daemon，也不会调用模型。CI 生成分发包及 SHA-256 校验文件。

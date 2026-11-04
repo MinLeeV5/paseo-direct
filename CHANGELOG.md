@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 — 2026-11-04
+
+- Fix discovery with a long-running legacy supervisor whose `paseo.pid` omits `serverId`. Validate the runtime home using the daemon's explicit identity override or persisted `server-id`, so plugin initialization and forwarding management can proceed after a Paseo upgrade.
+- Replace deployment addresses in documentation, the forwarding input placeholder, tests, and the distribution screenshot with documentation-only example addresses.
+
 ## 1.2.0 — 2026-11-04
 
 - Add a per-device preferred relay PC for each target. Verify the direct connection to B and the route from B to A before adopting the verified native connection.

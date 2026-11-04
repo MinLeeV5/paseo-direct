@@ -106,7 +106,7 @@ export function HostForwarding({ theme, locale, rpc, serverId, connectionKey, fo
       <Text style={s.heading}>{m.forwardAdd}</Text>
       <View style={{ gap: 7 }}>
         <Text style={s.text}>{m.forwardAddress}</Text>
-        <TextInput accessibilityLabel={m.forwardAddress} value={address} onChangeText={setAddress} placeholder="10.23.11.104:16767"
+        <TextInput accessibilityLabel={m.forwardAddress} value={address} onChangeText={setAddress} placeholder="192.0.2.42:16767"
           placeholderTextColor={theme.colors.foregroundMuted} autoCapitalize="none" autoCorrect={false} editable={!disabled} style={inputStyle} />
       </View>
       <View style={{ gap: 7 }}>
