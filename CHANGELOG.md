@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.1 — 2026-11-04
+## 1.2.1 — 2026-11-05
 
 - Fix discovery with a long-running legacy supervisor whose `paseo.pid` omits `serverId`. Validate the runtime home using the daemon's explicit identity override or persisted `server-id`, so plugin initialization and forwarding management can proceed after a Paseo upgrade.
 - Replace deployment addresses in documentation, the forwarding input placeholder, tests, and the distribution screenshot with documentation-only example addresses.
