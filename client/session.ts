@@ -4,7 +4,7 @@ import { PrivateBridge, releaseProbe, type ConnectionStatus, type VerifiedProbe 
 import { bounded, DirectError, publicError, type ErrorCode } from "./errors";
 
 export type Phase = "starting" | "ready" | "paused" | "background" | "probing" | "switching" |
-  "direct" | "relay" | "paseo" | "cooldown" | "unreachable" | "no_candidates" | "host_disabled" | "unsupported" | "error";
+  "direct" | "relay" | "routed" | "paseo" | "cooldown" | "unreachable" | "no_candidates" | "host_disabled" | "unsupported" | "error";
 export type EventCode = "direct_online" | "relay_return" | "verified" | "saved" | "relay_requested" |
   "settings_saved" | "address_removed" | "report_sent" | "save_unconfirmed";
 export interface ProbeResult { endpoint: string; latencyMs: number | null; error: ErrorCode | null; at?: number }
@@ -169,7 +169,8 @@ export class DirectSession {
       this.failures = 0;
       if (loaded.warning) { this.phase("paused"); return; }
       if (this.state.enabled && this.state.foreground) await this.check(false);
-      else this.phase(this.state.foreground ? "paused" : "background");
+      else this.phase(!this.state.foreground ? "background" : this.state.connection?.type === "routed" &&
+        this.state.connection.status === "online" ? "routed" : "paused");
     } catch (error) {
       if (!scope.signal.aborted) {
         this.fail(error);
@@ -205,8 +206,8 @@ export class DirectSession {
         this.patch({ lastOnlineType: connection.type });
       }
       if (!this.state.busy && this.state.foreground && !this.state.error &&
-        (this.state.enabled || ["direct", "relay", "paseo", "switching", "ready"].includes(this.state.phase))) {
-        this.phase(connection.type === "directTcp" ? "direct" : "relay");
+        (connection.type === "routed" || this.state.enabled || ["direct", "relay", "routed", "paseo", "switching", "ready"].includes(this.state.phase))) {
+        this.phase(connection.type === "directTcp" ? "direct" : connection.type === "routed" ? "routed" : "relay");
       }
     } catch (error) { this.fail(error); }
   }
@@ -221,7 +222,7 @@ export class DirectSession {
     this.resumeRequested = false;
     if (!this.bridge || !this.state.preferencesReady) void this.start();
     else if (this.state.enabled) void this.check(false);
-    else this.phase("paused");
+    else { this.phase("paused"); this.observeConnection(); }
   }
 
   async updatePreferences(change: Partial<Omit<DevicePreferences, "version" | "managed">>): Promise<boolean> {
@@ -233,7 +234,7 @@ export class DirectSession {
       this.patch({ preferences, enabled: preferences.enabled, error: null });
       this.log("settings_saved");
       this.failures = 0;
-      if (!preferences.enabled) { this.cancel(); this.phase("paused"); }
+      if (!preferences.enabled) { this.cancel(); this.phase("paused"); this.observeConnection(); }
       else if (this.state.foreground) this.schedule(0);
       return true;
     } catch (error) {
@@ -287,6 +288,17 @@ export class DirectSession {
       }
       this.patch({ preferences: loaded.values, enabled: loaded.values.enabled });
       if (!manual && !loaded.values.enabled) { this.phase("paused"); return; }
+      if (selectedEndpoint) {
+        const preferences = await bridge.updatePreferences(serverId, this.options.mobile,
+          (values) => ({ ...values, relayPauseUntil: this.now() + 60_000 }));
+        if (!this.valid(scope)) return;
+        this.patch({ preferences });
+      }
+      const active = bridge.status(serverId);
+      if (!selectedEndpoint && active.status === "online" && active.type === "routed" &&
+        active.originServerId === loaded.values.preferredOriginServerId) {
+        this.observeConnection(); this.phase("routed"); return;
+      }
       const discovery = await bounded(this.options.discover(), scope.signal, 6000);
       if (!this.valid(scope)) return;
       if (discovery.serverId !== serverId) throw new DirectError("identity");
@@ -300,11 +312,12 @@ export class DirectSession {
         this.phase("direct"); this.failures = 0; return;
       }
       if (!status.relaySaved) throw new DirectError("needs_relay");
+      const preferDirect = this.state.preferences.preferDirect && !this.state.preferences.preferredOriginServerId;
       const candidates = discovery.candidates.filter((candidate) => selectedEndpoint ? candidate.endpoint === selectedEndpoint :
         !this.state.preferences.excludedEndpoints.includes(candidate.endpoint) &&
-        (this.state.preferences.preferDirect || !status.directConnections?.some((saved) =>
+        (preferDirect || !status.directConnections?.some((saved) =>
           saved.endpoint === candidate.endpoint && saved.useTls === candidate.useTls)));
-      if (!candidates.length) { this.phase(!this.state.preferences.preferDirect && !selectedEndpoint ? "paseo" : "no_candidates"); return; }
+      if (!candidates.length) { this.phase(!preferDirect && !selectedEndpoint ? "paseo" : "no_candidates"); return; }
       let next = 0;
       const worker = async () => {
         while (!winner && next < candidates.length && this.valid(scope)) {
@@ -322,9 +335,14 @@ export class DirectSession {
       };
       await Promise.all([worker(), worker()]);
       if (!this.valid(scope)) return;
-      if (!winner) { failed = true; this.phase(!this.state.preferences.preferDirect && !selectedEndpoint ? "paseo" : "unreachable"); return; }
+      if (!winner) { failed = true; this.phase(!preferDirect && !selectedEndpoint ? "paseo" : "unreachable"); return; }
       const probe: VerifiedProbe = winner;
-      const activate = Boolean(selectedEndpoint) || this.state.preferences.preferDirect;
+      // A selected forwarding origin owns automatic priority; native paths remain available for fallback.
+      const currentPreferences = await bounded(bridge.readPreferences(serverId, this.options.mobile), scope.signal, 4000);
+      if (!this.valid(scope)) return;
+      if (currentPreferences.warning) throw new DirectError(currentPreferences.warning);
+      const activate = Boolean(selectedEndpoint) || (currentPreferences.values.enabled && currentPreferences.values.preferDirect &&
+        !currentPreferences.values.preferredOriginServerId && currentPreferences.values.relayPauseUntil <= this.now());
       this.log("verified", probe.candidate.endpoint);
       this.phase("switching");
       this.patch({ lastSavedEndpoint: probe.candidate.endpoint, persisted: false });
@@ -342,7 +360,8 @@ export class DirectSession {
       this.patch({ persisted });
       this.log(persisted ? "saved" : "save_unconfirmed", probe.candidate.endpoint);
       this.observeConnection();
-      this.phase(this.state.connection?.type === "directTcp" && this.state.connection.status === "online" ? "direct" : "relay");
+      this.phase(this.state.connection?.status === "online" && this.state.connection.type === "directTcp" ? "direct" :
+        this.state.connection?.type === "routed" ? "routed" : "relay");
       this.failures = 0;
     } catch (error) {
       if (!scope.signal.aborted) { failed = true; this.fail(error); }

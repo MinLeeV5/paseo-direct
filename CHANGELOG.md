@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 — 2026-11-04
+
+- Add a per-device preferred relay PC for each target. Verify the direct connection to B and the route from B to A before adopting the verified native connection.
+- Restore a verified original Paseo connection when B's direct transport or its upstream route fails. Retry with 30–300 second backoff, retaining cooldown across host plugin reloads.
+- Keep one foreground policy owner across all host plugin instances. Respect manual connection pauses, cancel background work, and prevent direct discovery from overriding a selected relay preference.
+- Add English / Simplified Chinese controls on forwarded targets and the target's plugin page. Require a saved original pairing before enabling automatic routing.
+
 ## 1.1.0 — 2026-11-04
 
 - Add a host-forwarding section to use a Paseo PC as a VPN relay for other hosts. Manage native target registrations and explicitly select the app's route through that PC.

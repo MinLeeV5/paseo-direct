@@ -1,11 +1,11 @@
 {
   "id": "paseo-direct",
   "name": "Paseo Direct",
-  "description": "Discover verified direct connections and use this PC to forward connections to other hosts, including through its VPN.",
+  "description": "Discover direct connections, prefer this PC as a VPN relay, and automatically restore original connections when it is unavailable.",
   "icon": "assets/icon.png",
-  "media": ["assets/screenshot.png"],
+  "media": ["assets/screenshot.png", "assets/forwarding.png"],
   "translations": {
-    "zh-CN": { "name": "Paseo Direct", "description": "前台验证 PC 直连，管理连接偏好，并通过此 PC 中继访问其他主机，支持 VPN 内目标。" }
+    "zh-CN": { "name": "Paseo Direct", "description": "前台验证 PC 直连，自动优先经此 PC 中继访问 VPN 内目标，失效时恢复原有连接。" }
   },
   "requirements": { "paseo": ">=0.13.0" }
 }

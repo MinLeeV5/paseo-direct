@@ -47,6 +47,19 @@ test("device preferences survive reconstruction without modifying the App host r
   assert.equal(storage.rows.get("@paseo:daemon-registry"), "unchanged");
 });
 
+test("v1.1 preferences gain a disabled relay preference without changing device identity or saved paths", async () => {
+  const storage = memory();
+  const { preferredOriginServerId: _, ...legacy } = defaultDevicePreferences(true);
+  storage.rows.set("@paseo-direct:v1:pc-a", JSON.stringify(legacy));
+  const loaded = await new DevicePreferenceStore(storage, "pc-a").read(true);
+  assert.equal(loaded.warning, null);
+  assert.equal(loaded.values.preferredOriginServerId, null);
+  assert.equal(loaded.values.enabled, true);
+  const store = new DevicePreferenceStore(storage, "pc-a");
+  await store.update(true, (values) => ({ ...values, preferredOriginServerId: "pc-b" }));
+  assert.equal((await new DevicePreferenceStore(storage, "pc-a").read(true)).values.preferredOriginServerId, "pc-b");
+});
+
 test("corrupt or unreadable saved preferences disable automatic changes and retain raw data", async () => {
   const storage = memory();
   storage.rows.set("@paseo-direct:v1:pc-a", "not json");

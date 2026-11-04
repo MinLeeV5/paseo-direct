@@ -1,5 +1,6 @@
 import type { ErrorCode } from "./errors";
 import type { EventCode, Phase } from "./session";
+import type { RoutePhase } from "./routing";
 
 const en = {
   current: "Current connection", direct: "Direct", relay: "Relay", waiting: "Waiting for PC",
@@ -45,6 +46,9 @@ const en = {
   forwardLabel: "Target name (optional)", forwardPassword: "Target Paseo password (if required)",
   forwardPasswordHint: "Use the target PC’s Paseo password. Authenticate the VPN on this PC. Paseo stores this target connection and password on this PC.",
   forwardSave: "Save target", forwardConnect: "Use this relay", forwardRemove: "Remove target",
+  autoForward: "Automatically prefer this relay", autoForwardHint: "Only on this device. Use this PC while its direct connection works; otherwise return to the target’s original Paseo connections.",
+  preferredRelay: "Preferred relay PC", preferredRelayHint: "Check both hops in the foreground. Keep an original connection to the target for fallback. Direct discovery does not override this preference.",
+  routeDefault: "Let Paseo choose", routeRecovery: "Failed routes retry after 30 seconds, with longer pauses after repeated failures.",
   forwardSharedHint: "Targets are shared with clients authorized to use this PC. Removing a target disconnects its routes for those clients. Only targets added here can be removed here.",
   forwardStatus_online: "This PC is connected to the target", forwardStatus_connecting: "This PC is connecting to the target…",
   forwardStatus_offline: "Target offline; Paseo will retry", forwardStatus_error: "Could not connect to the target", forwardStatus_disabled: "Target disabled",
@@ -52,6 +56,7 @@ const en = {
   forwardResult_saved: "Target saved. Wait for it to connect, then use this relay.", forwardResult_exists: "This target is already saved. Its connection and password were kept.",
   forwardResult_removed: "Target removed from this PC. The app may retain a route entry until you remove it in Paseo’s connection settings.",
   forwardResult_connected: "The target is connected through this PC. Select that host in the sidebar to use it.",
+  forwardResult_preference: "Relay preference saved on this device.",
   forwardResult_unavailable: "Could not save the change. Reconnect, reload and check the target status before retrying.",
   forwardResult_not_managed: "Only targets added by this plugin can be removed here. Reload to update the list.",
   forwardResult_limit: "Up to 16 targets can be added here. Remove an unused target first.",
@@ -94,6 +99,9 @@ const zh: Messages = {
   forwardLabel: "目标名称（选填）", forwardPassword: "目标的 Paseo 密码（如需）",
   forwardPasswordHint: "填写目标电脑的 Paseo 密码。VPN 请在此 PC 上登录；目标连接及密码由此 PC 的 Paseo 保存。",
   forwardSave: "保存目标", forwardConnect: "使用此中继", forwardRemove: "移除目标",
+  autoForward: "自动优先此中继", autoForwardHint: "仅在当前设备生效。此 PC 的直连可用时优先经它连接；失效时恢复目标的 Paseo 原有连接。",
+  preferredRelay: "优先使用的中继电脑", preferredRelayHint: "App 在前台时验证两段连接。请保留目标的原有连接用于回退；直连探测会遵守此中继偏好。",
+  routeDefault: "由 Paseo 选择", routeRecovery: "中继失效后至少等待 30 秒再试，连续失败会延长等待。",
   forwardSharedHint: "目标对获准使用此 PC 的客户端共享。移除会断开这些客户端经此 PC 到目标的连接；这里只能移除在此添加的目标。",
   forwardStatus_online: "此 PC 已连接到目标", forwardStatus_connecting: "此 PC 正在连接目标…", forwardStatus_offline: "目标离线，Paseo 将重试",
   forwardStatus_error: "无法连接目标", forwardStatus_disabled: "目标已停用",
@@ -101,6 +109,7 @@ const zh: Messages = {
   forwardResult_saved: "目标已保存，待连接成功后可使用此中继。", forwardResult_exists: "目标已存在，保留其原有连接和密码。",
   forwardResult_removed: "已从此 PC 移除目标。App 可能保留路由条目，可在 Paseo 的连接设置中清理。",
   forwardResult_connected: "目标已通过此 PC 连接，请在侧边栏选择该主机以使用。",
+  forwardResult_preference: "已保存当前设备的中继偏好。",
   forwardResult_unavailable: "未能保存变更，请恢复连接、重新加载并检查目标状态后再试。",
   forwardResult_not_managed: "这里只能移除插件添加的目标，请重新加载列表。", forwardResult_limit: "最多添加 16 个目标，请先移除不用的目标。",
   forwardResult_validation: "请填写可访问的 host:port、ws://host:port 或 wss://host:port，Paseo 密码单独填写。",
@@ -109,6 +118,7 @@ const phases: Record<Phase, [string, string]> = {
   starting: ["正在读取连接设置", "Reading connection settings"], ready: ["已就绪", "Ready"], paused: ["自动探测已暂停", "Automatic checks paused"],
   background: ["回到 App 后继续探测", "Checks resume in the foreground"], probing: ["正在验证可达地址与 PC 身份", "Verifying reachable addresses and PC identity"],
   switching: ["正在保存连接", "Saving connection"], direct: ["已通过直连连接 PC", "Connected directly to PC"], relay: ["通过 Relay 连接 PC", "Connected to PC through relay"],
+  routed: ["已通过中继电脑连接", "Connected through a relay PC"],
   paseo: ["已交由 Paseo 选择连接", "Paseo is choosing the connection"], cooldown: ["暂时使用 Relay", "Temporarily using relay"],
   unreachable: ["本次直连不可达，将继续重试", "Direct connection unavailable; checks will retry"], no_candidates: ["没有可探测的地址", "No addresses to check"],
   host_disabled: ["此 PC 已暂停提供直连地址", "Direct discovery paused on this PC"], unsupported: ["当前 Paseo 版本不兼容", "This Paseo version is incompatible"],
@@ -129,6 +139,16 @@ const errors: Record<ErrorCode, [string, string]> = {
   active_connection: ["请先切换到 Relay，再移除当前直连地址。", "Switch to relay before removing the current address."],
   not_managed: ["插件只能移除自己添加的地址。", "The plugin can only remove addresses it added."],
   route_missing: ["App 尚未发现经此 PC 的目标连接，请稍候重试，并确认手机直接连接到此 PC。", "The app has not discovered this route yet. Retry shortly and connect to this PC directly."],
+  needs_fallback: ["请先在本设备为目标电脑保留原有 Relay 或直连配对，才能启用自动中继与回退。", "Keep an original relay or direct pairing for the target on this device before enabling automatic routing and fallback."],
+};
+const routePhases: Record<RoutePhase, [string, string]> = {
+  waiting: ["中继直连不可用，使用 Paseo 原有连接", "Relay PC direct connection unavailable; using original Paseo connections"],
+  checking: ["正在验证经中继电脑到目标的连接", "Checking the connection through the relay PC"],
+  routed: ["已自动优先经此电脑连接", "Automatically connected through this PC"],
+  cooldown: ["已恢复 Paseo 原有连接，稍后重试中继", "Returned to original Paseo connections; relay will retry"],
+  paused: ["已暂时暂停自动中继", "Automatic routing is temporarily paused"],
+  fallback_unavailable: ["原有连接也暂时不可达，Paseo 与插件将继续重试", "Original connections also unavailable; Paseo and the plugin will keep retrying"],
+  error: ["自动中继需要检查设置", "Automatic routing needs attention"],
 };
 const events: Record<EventCode, [string, string]> = {
   direct_online: ["直连已上线", "Direct connection online"], relay_return: ["已回到 Relay", "Returned to relay"],
@@ -142,5 +162,6 @@ export function messages(locale: "en" | "zh-CN") {
   return { text: locale === "zh-CN" ? zh : en,
     phase: (value: Phase) => phases[value]?.[index] ?? value,
     error: (value: ErrorCode) => errors[value]?.[index] ?? value,
+    route: (value: RoutePhase) => routePhases[value]?.[index] ?? value,
     event: (value: EventCode) => events[value]?.[index] ?? value };
 }

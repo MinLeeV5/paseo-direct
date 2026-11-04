@@ -4,14 +4,20 @@ Paseo 的前台直连与主机中继管理插件。手机自动获取 PC 地址�
 
 ![Paseo Direct](assets/screenshot.png)
 
-**版本 1.1.0，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
+**版本 1.2.0，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
 
 ## 安装
 
 在需要直连或充当中继的 PC 上，先启用 Paseo 插件功能并完成手机的 Relay 配对，再安装此版本：
 
 ```sh
-paseo plugin add git:MinLeeV5/paseo-direct --ref v1.1.0
+paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.0
+```
+
+已通过 Git 安装 1.1.0 的 B 可直接升级：
+
+```sh
+paseo plugin update paseo-direct --ref v1.2.0
 ```
 
 也可从本地源码目录安装：
@@ -26,7 +32,7 @@ paseo plugin install /absolute/path/to/paseo-direct
 paseo plugin reload paseo-direct
 ```
 
-分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.1.0)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
+分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.0)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
 
 ## 使用
 
@@ -38,21 +44,23 @@ paseo plugin reload paseo-direct
 - **移除地址**：只能移除插件添加且未在使用的地址；移除后在本设备排除，避免自动添加回来。原型及人工添加的地址由 Paseo 自身的连接设置管理。
 - **暂停自动探测**：停止插件主动探测与切换。Paseo 仍可使用已保存的地址，并按自身逻辑探测和回退。
 
+**自动中继**有独立的设备偏好：在 B 的目标列表开启“自动优先此中继”，或在 A 的页面选择“优先使用的中继电脑”。手机到 B 的直连与 B 到 A 的通道可用时自动选择该路由；任一段失效时验证并恢复 A 已保存的原有连接。原有连接也不可达时继续重试，不保证离线目标可以连接。需先在手机保留 A 的 Relay 或直连配对。
+
 “本设备设置”中的开关、策略、间隔、超时、语言、排除列表和插件地址归属按 **当前设备 × PC** 保存，重启 App 后保留。连接计数与事件是本次 App 会话记录。
 
 “PC 地址配置”是官方 host settings，供连接此 PC 的所有设备共享：可关闭地址发现、忽略 VPN 等网卡，或补充 DNS / IPv4 / IPv6 地址。支持 `host:port`、`ws://host:port`、`wss://host:port`，每行一个；不接受密码、任意路径及仅手机本机可用的地址。自动发现只提取当前 daemon 实际 TCP 监听中的 IPv4 地址，最多 16 个候选。
 
 ## 通过另一台 PC 中继
 
-当 B 已运行 Paseo 且登录 VPN，手机可先直连 B，再经 B 访问只有 VPN 内可达的 A。在 **B 的 Paseo Direct → 通过此 PC 中继** 中保存 A 的映射地址（例如 `10.23.11.104:16767`），按需单独填写 A 的 Paseo 密码。等待 B 连接成功，点击 **使用此中继**，再在侧边栏选择 A。
+当 B 已运行 Paseo 且登录 VPN，手机可先直连 B，再经 B 访问只有 VPN 内可达的 A。在 **B 的 Paseo Direct → 通过此 PC 中继** 中保存 A 的映射地址（例如 `10.23.11.104:16767`），按需单独填写 A 的 Paseo 密码。等待 B 连接成功，开启目标的 **自动优先此中继**，再在侧边栏选择 A；也可点击“使用此中继”仅手动切换一次。
 
-此功能自 1.1.0 提供，复用 Paseo 的主机转发，不需要手机登录 VPN 或在 B 上另开代理端口。目标由 B 的原生主机配置持久保存并向获准使用 B 的客户端共享；插件只管理自己添加的目标。完整拓扑、配置步骤和连接边界见 [VPN 电脑中继说明](docs/forwarding.md)。
+主机转发自 1.1.0 提供，自动优先与回退自 1.2.0 提供，复用 Paseo 的主机转发，不需要手机登录 VPN 或在 B 上另开代理端口。目标由 B 的原生主机配置持久保存并向获准使用 B 的客户端共享；自动优先来源按手机与目标保存，一个目标只选择一个来源。完整配置步骤见 [VPN 电脑中继说明](docs/forwarding.md)。
 
 ## 网络条件与边界
 
 PC 的 TCP 端口必须能从手机访问。插件不会修改监听、防火墙、端口映射或 Relay 配置。无 TLS 的直连沿用 Paseo 的信任模型，适合可信 LAN / VPN；主机 ID 比对不等同于 TLS 身份认证。跨不可信网络应使用正确配置的 TLS 地址。
 
-仅在 App 前台主动探测，不提供后台服务、NAT 打洞、Bonjour 或自动 IPv6 发现。完全离线时不能获取 PC 的新地址。已保存直连断开后的 Relay 回退由 Paseo 核心完成；插件观察回退并暂缓至少 30 秒，减少反复切换，随后按间隔重试。恢复 Wi-Fi 后可能要等待一个探测周期和重试退避。
+仅在 App 前台主动探测，不提供后台服务、NAT 打洞、Bonjour 或自动 IPv6 发现。完全离线时不能获取 PC 的新地址。已保存直连断开后的 Relay 回退由 Paseo 核心完成；自动中继策略会另行验证并恢复目标原有的非转发连接。中继故障后等待至少 30 秒，连续失败最长退避 300 秒，再验证并恢复优先路径。手动选择 Relay 或指定直连时，自动中继也会暂停 60 秒。已保存路径仍由 Paseo 核心探测和选择。
 
 已有 Android v0.13.2 真机验证：直连保存、关闭 Wi-Fi 后回到 Relay、恢复 Wi-Fi 后自动回直连。1.0 的设置与界面另行进行自动化和真实 Web App 验收；iOS 仍需真机验收。详见 [验证记录](docs/verification.md)。
 
@@ -74,12 +82,12 @@ paseo plugin logs paseo-direct
 npm ci --ignore-scripts
 npm run verify
 npm run release:pack
-npm run verify:daemon -- dist/paseo-direct-1.1.0.tgz
+npm run verify:daemon -- dist/paseo-direct-1.2.0.tgz
 ```
 
 `verify` 运行类型检查和连接行为回归。干净安装验证创建独立临时 daemon，测试分发包在无 `node_modules` 时的编译、RPC、PC 设置、身份与绑定端口，并用第二个带密码的临时 daemon 验证主机转发、错误密码拒绝与清理；不会重启当前使用中的 daemon，也不会调用模型。CI 生成分发包及 SHA-256 校验文件。
 
-源码分工：`server/` 发现、诊断与主机转发管理，`shared/` 协议及设置，`client/bridge.ts` 私有适配器，`client/session.ts` 生命周期和策略，`client/screen.tsx` 管理页面。
+源码分工：`server/` 发现、诊断与主机转发管理，`shared/` 协议及设置，`client/bridge.ts` 私有适配器，`client/session.ts` 直连生命周期，`client/routing.ts` 共享自动中继策略，`client/screen.tsx` 管理页面。
 
 ## 停用与卸载
 

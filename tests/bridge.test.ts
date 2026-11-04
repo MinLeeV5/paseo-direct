@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PrivateBridge, releaseProbe, type PrivateStore, type ProbeClient, type Host } from "../client/bridge";
+import { PrivateBridge, releaseProbe, type PrivateStore, type ProbeClient, type Host, type RuntimeSnapshot } from "../client/bridge";
 
 const candidate = { endpoint: "192.168.1.10:6767", interfaceName: "en0", useTls: false };
 function fixture(serverId = "pc-a", version: string | undefined = "0.13.2") {
@@ -210,4 +210,122 @@ test("route activation must confirm the target identity and selected route after
   const offline = routedFixture();
   offline.setSnapshot({ connectionStatus: "offline" });
   await assert.rejects(offline.bridge.activateForwardedHost("pc-a", "target"), /unreachable/);
+});
+
+function automaticFixture() {
+  const f = routedFixture();
+  f.host.connections.push({ id: "lan-b", type: "directTcp", endpoint: "192.168.1.64:6767" });
+  f.target.connections.unshift({ id: "original", type: "relay" });
+  let origin: RuntimeSnapshot = { activeConnectionId: "lan-b", connectionStatus: "online", client: f.client };
+  let target: RuntimeSnapshot = { activeConnectionId: "original", connectionStatus: "online", client: {
+    ...f.client, getLastServerInfoMessage: () => ({ serverId: "target", version: "0.15.0" }),
+  } };
+  let closed = 0;
+  const connects: string[] = [], activations: string[] = [];
+  const makeClient = (): ProbeClient => ({ ...f.client, close: async () => { closed++; },
+    getLastServerInfoMessage: () => ({ serverId: "target", version: "0.15.0" }),
+  });
+  f.store.getSnapshot = (id) => id === "target" ? target : origin;
+  f.store.deps.connectToDaemon = async ({ connection }) => {
+    connects.push(connection.id); return { client: makeClient(), serverId: "target" };
+  };
+  f.store.controllers.set("target", { activateConnection: async ({ connectionId, existingClient }) => {
+    assert(existingClient, "automatic switching must adopt a verified socket");
+    activations.push(connectionId);
+    target = { ...target, activeConnectionId: connectionId, connectionStatus: "online", client: existingClient };
+  } });
+  return { ...f, connects, activations, makeClient,
+    setOrigin: (patch: Partial<RuntimeSnapshot>) => { origin = { ...origin, ...patch }; },
+    setTarget: (patch: Partial<RuntimeSnapshot>) => { target = { ...target, ...patch }; },
+    closed: () => closed };
+}
+
+test("automatic routing verifies and adopts only B's route, retaining the original registry and its credentials", async () => {
+  const f = automaticFixture();
+  const original = JSON.stringify(f.store.getHosts());
+  await f.bridge.preferRoute("pc-a", "target", new AbortController().signal, 100);
+  assert.deepEqual(f.connects, ["via:pc-a"]);
+  assert.deepEqual(f.activations, ["via:pc-a"]);
+  assert.equal(f.closed(), 0, "the adopted socket belongs to Paseo");
+  await f.bridge.preferRoute("pc-a", "target", new AbortController().signal, 100);
+  assert.equal(f.connects.length, 1, "a healthy active route uses its own liveness check");
+  assert.equal(JSON.stringify(f.store.getHosts()), original);
+  const status = f.bridge.status("target");
+  assert.equal(status.originServerId, "pc-a");
+  assert.equal(status.originalSaved, true);
+  assert(!JSON.stringify(status).includes("test-only-password"));
+});
+
+test("automatic routing refuses B over Relay, absent fallback paths, and the wrong target identity", async () => {
+  const f = automaticFixture();
+  f.setOrigin({ activeConnectionId: "relay-a" });
+  await assert.rejects(f.bridge.preferRoute("pc-a", "target", new AbortController().signal, 100), /unreachable/);
+  assert.equal(f.connects.length, 0);
+  f.setOrigin({ activeConnectionId: "lan-b" });
+  f.target.connections = f.target.connections.filter((c) => c.type === "routed");
+  await assert.rejects(f.bridge.preferRoute("pc-a", "target", new AbortController().signal, 100), /needs_fallback/);
+  f.target.connections.unshift({ id: "original", type: "relay" });
+  const client = f.makeClient();
+  f.store.deps.connectToDaemon = async () => ({ client: { ...client,
+    getLastServerInfoMessage: () => ({ serverId: "impostor" }) }, serverId: "impostor" });
+  await assert.rejects(f.bridge.preferRoute("pc-a", "target", new AbortController().signal, 100), /identity/);
+  assert.equal(f.closed(), 1);
+  assert.equal(f.activations.length, 0);
+});
+
+test("B changing transports while a route probe is in flight cannot replace A's working original path", async () => {
+  const f = automaticFixture();
+  let enter!: () => void, finish!: () => void;
+  const entered = new Promise<void>((resolve) => { enter = resolve; });
+  const wait = new Promise<void>((resolve) => { finish = resolve; });
+  f.store.deps.connectToDaemon = async () => { enter(); await wait; return { client: f.makeClient(), serverId: "target" }; };
+  const pending = f.bridge.preferRoute("pc-a", "target", new AbortController().signal, 1000);
+  await entered; f.setOrigin({ activeConnectionId: "relay-a" }); finish();
+  await assert.rejects(pending, /unreachable/);
+  assert.equal(f.closed(), 1);
+  assert.equal(f.activations.length, 0);
+  assert.equal(f.bridge.status("target").connectionId, "original");
+});
+
+test("fallback probes only saved non-routed paths, preserves the active path until a socket is verified and cleans up losers", async () => {
+  const f = automaticFixture();
+  f.target.connections.unshift({ id: "old-lan", type: "directTcp", endpoint: "192.168.99.10:6767" });
+  f.setTarget({ activeConnectionId: "via:pc-a" });
+  f.store.deps.connectToDaemon = async ({ connection }) => {
+    f.connects.push(connection.id);
+    assert.equal(f.bridge.status("target").connectionId, "via:pc-a");
+    if (connection.id === "old-lan") throw Error("unreachable with secret context");
+    return { client: f.makeClient(), serverId: "target" };
+  };
+  const registry = JSON.stringify(f.store.getHosts());
+  await f.bridge.restoreOriginal("target", "pc-a", new AbortController().signal, 100);
+  assert.deepEqual(f.activations, ["original"]);
+  assert(!f.connects.some((id) => id.startsWith("via:")));
+  assert.equal(JSON.stringify(f.store.getHosts()), registry);
+  await f.bridge.restoreOriginal("target", "pc-a", new AbortController().signal, 100);
+  assert.equal(f.activations.length, 1, "do not replace a working native fallback");
+});
+
+test("cancelled fallback releases late sockets and never adopts after backgrounding", async () => {
+  const f = automaticFixture();
+  f.setTarget({ activeConnectionId: "via:pc-a" });
+  let finish!: () => void;
+  const wait = new Promise<void>((resolve) => { finish = resolve; });
+  f.store.deps.connectToDaemon = async () => { await wait; return { client: f.makeClient(), serverId: "target" }; };
+  const scope = new AbortController();
+  const pending = f.bridge.restoreOriginal("target", "pc-a", scope.signal, 1000);
+  scope.abort(); await assert.rejects(pending, /cancelled/);
+  finish(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(f.closed(), 1);
+  assert.deepEqual(f.activations, []);
+});
+
+test("simultaneous successful original probes hand off only one socket and close the other", async () => {
+  const f = automaticFixture();
+  f.target.connections.unshift({ id: "second-original", type: "directTcp", endpoint: "192.168.1.10:6767" });
+  f.setTarget({ activeConnectionId: "via:pc-a" });
+  await f.bridge.restoreOriginal("target", "pc-a", new AbortController().signal, 100);
+  assert.equal(f.connects.length, 2);
+  assert.equal(f.activations.length, 1);
+  assert.equal(f.closed(), 1);
 });

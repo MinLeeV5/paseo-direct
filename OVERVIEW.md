@@ -18,7 +18,11 @@ Device preferences persist separately for each PC. Shared PC settings support ig
 
 ## Use a PC as a relay
 
-Open **Use this PC as a relay** on a VPN-connected Paseo PC and save a target address reachable from that PC. Your phone can connect to the relay PC over the LAN and use **Use this relay** to select the target's forwarded connection, without joining the VPN itself. The target PC does not need this plugin.
+Open **Use this PC as a relay** on a VPN-connected Paseo PC and save a target address reachable from that PC. Pair the phone with both PCs, keep an original connection to the target, and enable **Automatically prefer this relay**. The app verifies the direct link to the relay PC and the forwarded target connection, automatically returns to the target's original Paseo connections when either hop fails, and retries the preferred route with backoff. The target PC does not need this plugin.
+
+The preference is saved only on the current device, separately for each target. It runs in the foreground even when the plugin page is closed. An online relay PC using public Relay is not treated as a direct path. Manual relay or direct selection pauses automatic routing for 60 seconds. If all original paths are also unavailable, Paseo and the plugin keep retrying.
+
+![Automatic forwarding preference with example addresses](assets/forwarding.png)
 
 Target connections and any target Paseo password are stored by the relay PC's native host registry and shared with clients authorized to use that PC. Only targets added by this plugin can be removed here; disabling the plugin leaves native targets saved. Host forwarding requires compatible host and App capabilities.
 
@@ -32,6 +36,6 @@ Diagnostics are sent only when you press **Send diagnostics to PC**. They includ
 
 Supports Paseo **0.13.0 and later**, with no upper version limit. Required private App connection APIs are checked at runtime; operations stop if they are unavailable. Android 0.13.2 has completed the direct → relay → direct Wi-Fi test; iOS still needs device validation.
 
-Checks run only in the foreground. There is no background service, NAT traversal or automatic IPv6 discovery. Paseo itself handles failure of a saved connection and relay fallback. Plain WebSocket connections follow Paseo’s existing trust model and should be used on trusted LAN / VPN networks; use properly configured TLS on untrusted networks.
+Checks run only in the foreground. There is no background service, NAT traversal or automatic IPv6 discovery. Paseo handles saved connections; the automatic routing policy also verifies and restores a saved non-forwarded path when the preferred relay fails. Plain WebSocket connections follow Paseo’s existing trust model and should be used on trusted LAN / VPN networks; use properly configured TLS on untrusted networks.
 
 Disabling the plugin stops its checks and leaves saved connections available in Paseo.

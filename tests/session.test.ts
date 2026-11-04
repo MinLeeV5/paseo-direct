@@ -252,3 +252,39 @@ test("ownership metadata finishes even when a successful handoff unloads the plu
     assert.equal(f.counts().closed, 0);
   } finally { first.dispose(); second?.dispose(); }
 });
+
+test("A's direct discovery respects a preferred forwarding origin, retaining native addresses without activating them", async () => {
+  const f = fixture();
+  await f.preferences.update(true, (values) => ({ ...values, preferredOriginServerId: "pc-b" }));
+  const session = f.create();
+  try {
+    await session.start();
+    assert.equal(f.counts().saves, 1);
+    assert.equal(f.counts().closed, 1);
+    assert.equal(session.getSnapshot().connection?.type, "relay");
+    f.setStatus({ ...session.getSnapshot().connection!, status: "online", type: "routed", originServerId: "pc-b" });
+    await session.check();
+    assert.equal(f.counts().saves, 1);
+    assert.equal(session.getSnapshot().phase, "routed");
+    await session.check(true, f.discovery.candidates[0].endpoint);
+    assert.equal(session.getSnapshot().connection?.type, "directTcp", "manual direct selection still works");
+    assert(session.getSnapshot().preferences.relayPauseUntil > 1000, "manual choice pauses route priority too");
+  } finally { session.dispose(); }
+});
+
+test("a relay preference saved during an in-flight direct probe prevents that probe from overriding the route policy", async () => {
+  const f = fixture(); let enter!: () => void, release!: () => void;
+  const entered = new Promise<void>((resolve) => { enter = resolve; });
+  const wait = new Promise<void>((resolve) => { release = resolve; });
+  const probe = f.bridge.probe;
+  f.bridge.probe = async (...args) => { enter(); await wait; return probe(...args); };
+  const session = f.create();
+  try {
+    const running = session.start(); await entered;
+    await f.preferences.update(true, (values) => ({ ...values, preferredOriginServerId: "pc-b" }));
+    release(); await running;
+    assert.equal(f.counts().saves, 1);
+    assert.equal(f.counts().closed, 1);
+    assert.equal(session.getSnapshot().connection?.type, "relay");
+  } finally { session.dispose(); }
+});

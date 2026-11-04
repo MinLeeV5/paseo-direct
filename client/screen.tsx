@@ -9,21 +9,30 @@ import { HostForwarding } from "./forwarding";
 import { messages } from "./messages";
 import { VERSION } from "../shared/version";
 import type { CurrentHostRpc } from "./rpc";
+import type { PreferredRoutes, RoutingSnapshot } from "./routing";
+import { publicError, type ErrorCode } from "./errors";
 
-type Props = PluginSurfaceProps & { session: DirectSession; rpc: CurrentHostRpc; settings?: boolean };
-export function DirectScreen({ theme, session, rpc, settings = false }: Props) {
+const emptyRoutes: RoutingSnapshot = { targets: {} };
+const noSubscribe = () => () => {};
+const noSnapshot = () => emptyRoutes;
+type Props = PluginSurfaceProps & { session: DirectSession; rpc: CurrentHostRpc; routes: PreferredRoutes | null; settings?: boolean };
+export function DirectScreen({ theme, session, rpc, routes, settings = false }: Props) {
   const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+  const routing = useSyncExternalStore(routes?.subscribe ?? noSubscribe, routes?.getSnapshot ?? noSnapshot, noSnapshot);
+  const [routeError, setRouteError] = useState<ErrorCode | null>(null);
+  const [savingRoute, setSavingRoute] = useState(false);
   const [deviceOpen, setDeviceOpen] = useState(false);
   const [pcOpen, setPcOpen] = useState(false);
   const [forwardingOpen, setForwardingOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const locale = session.locale();
-  const { text: m, phase, error, event } = messages(locale);
+  const { text: m, phase, error, event, route } = messages(locale);
   const c = theme.colors;
   const s = styles(theme);
   const preferences = state.preferences;
   const active = state.connection;
+  const preferred = state.serverId ? routing.targets[state.serverId] : undefined;
   const online = active?.status === "online";
   const holdUntil = Math.max(state.holdDirectUntil, preferences.relayPauseUntil);
   const held = holdUntil > now;
@@ -69,6 +78,23 @@ export function DirectScreen({ theme, session, rpc, settings = false }: Props) {
       <SettingsSwitch label={m.automatic} hint={m.automaticHint} value={state.enabled}
         onValueChange={(enabled) => update({ enabled })} disabled={disabled} />
     </SettingsCard>
+    {routes && state.serverId && (!!active?.routedConnections?.length || preferred) && <View style={{ gap: 10 }}>
+      <SettingsCard>
+        <SettingsSelect label={m.preferredRelay} hint={m.preferredRelayHint} value={preferred?.originServerId ?? ""}
+          options={[{ label: m.routeDefault, value: "" },
+            ...(active?.routedConnections ?? []).map((row) => ({ label: row.label, value: row.originServerId })),
+            ...(preferred && !active?.routedConnections?.some((row) => row.originServerId === preferred.originServerId) ?
+              [{ label: preferred.originLabel, value: preferred.originServerId }] : [])]}
+          disabled={disabled || savingRoute || !state.foreground} onValueChange={(value) => {
+            setSavingRoute(true); setRouteError(null);
+            void routes.select(state.serverId!, value || null).then(() => session.updatePreferences({}))
+              .catch((value) => setRouteError(publicError(value))).finally(() => setSavingRoute(false));
+          }} />
+      </SettingsCard>
+      {preferred && <Text style={s.muted}>{preferred.originLabel} · {route(preferred.phase)}</Text>}
+      {(routeError ?? preferred?.error) && <Text accessibilityRole="alert" style={{ ...s.text, color: c.statusWarning }}>{error((routeError ?? preferred?.error)!)}</Text>}
+      {preferred && <Text style={s.muted}>{m.routeRecovery}</Text>}
+    </View>}
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
       <Action theme={theme} primary label={state.busy ? m.checking : m.check} disabled={disabled || state.busy || !state.foreground || held}
         onPress={() => { void session.check(); }} />
@@ -133,6 +159,7 @@ export function DirectScreen({ theme, session, rpc, settings = false }: Props) {
     </Fold>
     <Fold theme={theme} title={m.forwarding} open={forwardingOpen} onToggle={() => setForwardingOpen(!forwardingOpen)}>
       {state.serverId && <HostForwarding theme={theme} locale={locale} rpc={rpc} serverId={state.serverId}
+        routes={routes}
         foreground={state.foreground} direct={active?.type === "directTcp" || active?.type === "directSocket"}
         connectionKey={`${state.serverId}:${active?.connectionId}:${active?.status}`} />}
     </Fold>

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Text, View } from "react-native";
-import { TextInput } from "@getpaseo/plugin/client/ui";
+import { TextInput, SettingsSwitch } from "@getpaseo/plugin/client/ui";
 import {
   forwardingAddRpc, forwardingInputSchema, forwardingListRpc, forwardingRemoveRpc,
   type ForwardingAction, type ForwardingDirectory,
@@ -10,21 +10,27 @@ import { publicError, type ErrorCode } from "./errors";
 import { Action, styles, type Theme } from "./controls";
 import { messages } from "./messages";
 import type { CurrentHostRpc } from "./rpc";
+import type { PreferredRoutes, RoutingSnapshot } from "./routing";
 
-export function HostForwarding({ theme, locale, rpc, serverId, connectionKey, foreground, direct }: {
+const emptyRoutes: RoutingSnapshot = { targets: {} };
+const noSubscribe = () => () => {};
+const noSnapshot = () => emptyRoutes;
+
+export function HostForwarding({ theme, locale, rpc, serverId, connectionKey, foreground, direct, routes }: {
   theme: Theme; locale: "en" | "zh-CN"; rpc: CurrentHostRpc; serverId: string;
-  connectionKey: string; foreground: boolean; direct: boolean;
+  connectionKey: string; foreground: boolean; direct: boolean; routes: PreferredRoutes | null;
 }) {
+  const routing = useSyncExternalStore(routes?.subscribe ?? noSubscribe, routes?.getSnapshot ?? noSnapshot, noSnapshot);
   const [directory, setDirectory] = useState<ForwardingDirectory | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [address, setAddress] = useState("");
   const [label, setLabel] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<ForwardingAction["code"] | "validation" | "connected" | null>(null);
+  const [notice, setNotice] = useState<ForwardingAction["code"] | "validation" | "connected" | "preference" | null>(null);
   const [connectionError, setConnectionError] = useState<ErrorCode | null>(null);
   const active = useRef(false), sequence = useRef(0), generation = useRef(0), writing = useRef(false);
-  const { text: m, error } = messages(locale);
+  const { text: m, error, route } = messages(locale);
   const s = styles(theme);
 
   async function reload() {
@@ -45,13 +51,13 @@ export function HostForwarding({ theme, locale, rpc, serverId, connectionKey, fo
     return () => { active.current = false; generation.current++; sequence.current++; clearInterval(timer); };
   }, [rpc, serverId, connectionKey, foreground]);
 
-  async function change(action: () => Promise<ForwardingAction | null>) {
+  async function change(action: () => Promise<ForwardingAction | null>, success: "connected" | "preference" = "connected") {
     if (!active.current || writing.current) return;
     const current = generation.current;
     writing.current = true; sequence.current++; setBusy(true); setNotice(null); setConnectionError(null);
     try {
       const result = await action();
-      if (active.current && generation.current === current) setNotice(result?.code ?? "connected");
+      if (active.current && generation.current === current) setNotice(result?.code ?? success);
     } catch (value) {
       if (active.current && generation.current === current) setConnectionError(publicError(value));
     } finally {
@@ -82,6 +88,13 @@ export function HostForwarding({ theme, locale, rpc, serverId, connectionKey, fo
         <Text style={s.muted}>{m[`forwardStatus_${host.status}`]}</Text>
         {host.status === "error" && <Text style={s.muted}>{m.forwardTargetError}</Text>}
         {host.serverId && <Text selectable style={s.muted}>{host.serverId}</Text>}
+        {routes && host.serverId && host.serverId !== serverId && <SettingsSwitch label={m.autoForward} hint={m.autoForwardHint}
+          value={routing.targets[host.serverId]?.originServerId === serverId} disabled={disabled}
+          onValueChange={(value) => { void change(async () => { await routes.select(host.serverId!, value ? serverId : null); return null; }, "preference"); }} />}
+        {host.serverId && routing.targets[host.serverId]?.originServerId === serverId && <>
+          <Text style={s.muted}>{route(routing.targets[host.serverId].phase)}</Text>
+          {routing.targets[host.serverId].error && <Text style={{ ...s.text, color: theme.colors.statusWarning }}>{error(routing.targets[host.serverId].error!)}</Text>}
+        </>}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <Action theme={theme} compact label={m.forwardConnect} accessibilityLabel={`${m.forwardConnect} · ${host.label ?? host.address}`}
             disabled={disabled || loadError || host.status !== "online" || !host.serverId || host.serverId === serverId}
@@ -109,7 +122,7 @@ export function HostForwarding({ theme, locale, rpc, serverId, connectionKey, fo
       </View>
     </>}
     {notice && <Text accessibilityRole="alert" style={{ ...s.text,
-      color: ["saved", "exists", "removed", "connected"].includes(notice) ? theme.colors.statusSuccess : theme.colors.statusWarning }}>
+      color: ["saved", "exists", "removed", "connected", "preference"].includes(notice) ? theme.colors.statusSuccess : theme.colors.statusWarning }}>
       {m[`forwardResult_${notice}`]}
     </Text>}
     {connectionError && <Text accessibilityRole="alert" style={{ ...s.text, color: theme.colors.statusWarning }}>{error(connectionError)}</Text>}

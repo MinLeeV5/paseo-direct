@@ -21,6 +21,7 @@ export const devicePreferencesSchema = z.object({
   version: z.literal(1),
   enabled: z.boolean(),
   preferDirect: z.boolean().default(true),
+  preferredOriginServerId: z.string().min(1).max(256).nullable().default(null),
   intervalSeconds: z.number().int().min(10).max(300).default(20),
   timeoutSeconds: z.number().int().min(1).max(10).default(3),
   language: z.enum(["system", "zh-CN", "en"]).default("system"),
