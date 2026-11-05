@@ -1,0 +1,47 @@
+README.md
+  856f6716ca2b884a 7,11,14,20,23,37,65,87
+client/routing.ts
+  856f6716ca2b884a 54-70
+shared/version.ts
+  856f6716ca2b884a 1
+docs/releasing.md
+  856f6716ca2b884a 19
+docs/verification.md
+  856f6716ca2b884a 3-13
+CHANGELOG.md
+  856f6716ca2b884a 3-7
+tests/routing.test.ts
+  856f6716ca2b884a 169-268
+docs/research/paseo-reconnect-0.15.md
+  856f6716ca2b884a 60-69
+package.json
+  856f6716ca2b884a 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.8.2",
+  "base_commit_sha": "4c14df7325024553c3add173ff1f4e18368ed0b8",
+  "prompts": {
+    "856f6716ca2b884a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1acc7-dc9a-7b21-b1e9-7ee003b10ef6",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "李伟民 <liweimin@cvte.com>",
+      "messages": [],
+      "total_additions": 177,
+      "total_deletions": 63,
+      "accepted_lines": 131,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/87a5ff381272a3e40d8d790f5d0c60937e2e4b9052995324cc3540ccbd54db25",
+      "token_usage": {
+        "input_tokens": 145655,
+        "output_tokens": 37014,
+        "cache_read_tokens": 4026112,
+        "cache_creation_tokens": null,
+        "total_cost": null
+      }
+    }
+  }
+}
