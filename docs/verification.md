@@ -15,6 +15,8 @@
 
 手机增强报告与碰撞机制的周期和连接表现吻合，但尚未记录到通道关闭的原生错误码。升级后的手机持续稳定性尚待确认，不能用本机验证代替真机验收。原始证据在本地忽略目录 `probe-session-revocation.json`、`isolated-probes-native.json`、`runtime-diagnostics-native.json` 中。
 
+已发布 `v1.2.3`（`2466b29`）并从该 tag 更新日常 Mac。确认编译后的客户端包含探测身份隔离与被动诊断，已有目标注册保持在线，真实转发请求身份匹配；日常 supervisor、daemon 与桌面客户端进程均未重启。本地验收摘要为 `local-stable-1.2.3.json`。
+
 ## 1.2.2 · 2026-11-05
 
 修复原生探测与连接交接竞争，以及 Paseo 0.15.0 在“在线 → 在线”替换 client 后，切换 workspace 长期显示“正在更新消息”的同步生命周期问题。具体机制见 [分析记录](research/paseo-reconnect-0.15.md)。
