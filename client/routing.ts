@@ -51,7 +51,23 @@ export class PreferredRoutes {
     };
     this.leases.set(owner, foreground); update();
     return {
-      setForeground: (value) => { if (this.leases.has(owner)) { this.leases.set(owner, value); update(); } },
+      setForeground: (value) => {
+        if (!this.leases.has(owner)) return;
+        const wasForeground = this.foreground();
+        this.leases.set(owner, value);
+        if (wasForeground && !this.foreground()) {
+          // Both hops reconnect independently after suspension. Reverify healthy
+          // routes on resume instead of counting Relay winning that race as a failure.
+          // Actual failure cooldowns survive suspension and plugin disposal.
+          for (const record of this.records.values()) {
+            if (record.wasRouted && record.failures === 0 && !record.pendingFallback) {
+              record.wasRouted = false;
+              record.retryAt = 0;
+            }
+          }
+        }
+        update();
+      },
       dispose: () => { this.leases.delete(owner); update(); },
     };
   }

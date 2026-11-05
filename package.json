@@ -1,6 +1,6 @@
 {
   "name": "paseo-direct",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "type": "module",
   "description": "Discover verified direct connections and configure host forwarding for Paseo",
   "license": "MIT",

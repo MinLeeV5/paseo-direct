@@ -4,23 +4,23 @@ Paseo 的前台直连与主机中继管理插件。手机自动获取 PC 地址�
 
 ![Paseo Direct](assets/screenshot.png)
 
-**版本 1.2.3，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
+**版本 1.2.4，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 修复后台恢复时 Relay 先连接导致的自动中继误退避。连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
 
 ## 安装
 
-在需要直连或充当中继的 PC 上，先启用 Paseo 插件功能并完成手机的 Relay 配对，再安装此版本：
+在需要直连或充当中继的 PC 上，先启用 Paseo 插件功能并完成手机的 Relay 配对，再安装稳定版：
 
 ```sh
-paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.3
+paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.4
 ```
 
 已通过 Git 安装旧版的 B 可直接升级：
 
 ```sh
-paseo plugin update paseo-direct --ref v1.2.3
+paseo plugin update paseo-direct --ref v1.2.4
 ```
 
-升级到 1.2.3 后，请将手机 Paseo 完全退出并重新打开一次，以重建可能卡住的消息同步状态。重连与切换 workspace 后“正在更新消息”的排查和修复见 [分析记录](docs/research/paseo-reconnect-0.15.md)。
+升级到 1.2.4 后，请将提供此插件的各 PC 更新到同一版本，再将手机 Paseo 完全退出并重新打开一次，以重建共享选路策略和可能卡住的消息同步状态。后台恢复及切换 workspace 后“正在更新消息”的排查和修复见 [分析记录](docs/research/paseo-reconnect-0.15.md)。
 
 也可从本地源码目录安装：
 
@@ -34,7 +34,7 @@ paseo plugin install /absolute/path/to/paseo-direct
 paseo plugin reload paseo-direct
 ```
 
-分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.3)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
+分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.4)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
 
 ## 使用
 
@@ -62,7 +62,7 @@ paseo plugin reload paseo-direct
 
 PC 的 TCP 端口必须能从手机访问。插件不会修改监听、防火墙、端口映射或 Relay 配置。无 TLS 的直连沿用 Paseo 的信任模型，适合可信 LAN / VPN；主机 ID 比对不等同于 TLS 身份认证。跨不可信网络应使用正确配置的 TLS 地址。
 
-仅在 App 前台主动探测，不提供后台服务、NAT 打洞、Bonjour 或自动 IPv6 发现。完全离线时不能获取 PC 的新地址。已保存直连断开后的 Relay 回退由 Paseo 核心完成；自动中继策略会另行验证并恢复目标原有的非转发连接。中继故障后等待至少 30 秒，连续失败最长退避 300 秒，再验证并恢复优先路径。手动选择 Relay 或指定直连时，自动中继也会暂停 60 秒。已保存路径仍由 Paseo 核心探测和选择。
+仅在 App 前台主动探测，不提供后台服务、NAT 打洞、Bonjour 或自动 IPv6 发现。完全离线时不能获取 PC 的新地址。已保存直连断开后的 Relay 回退由 Paseo 核心完成；自动中继策略会另行验证并恢复目标原有的非转发连接。后台前健康的中继在回到前台后重新验证，B 的直连恢复后即可尝试切回；真正中继故障后等待至少 30 秒，连续失败最长退避 300 秒。手动选择 Relay 或指定直连时，自动中继也会暂停 60 秒。已保存路径仍由 Paseo 核心探测和选择。
 
 已有 Android v0.13.2 真机验证：直连保存、关闭 Wi-Fi 后回到 Relay、恢复 Wi-Fi 后自动回直连。1.0 的设置与界面另行进行自动化和真实 Web App 验收；iOS 仍需真机验收。详见 [验证记录](docs/verification.md)。
 
@@ -84,7 +84,7 @@ paseo plugin logs paseo-direct
 npm ci --ignore-scripts
 npm run verify
 npm run release:pack
-npm run verify:daemon -- dist/paseo-direct-1.2.3.tgz
+npm run verify:daemon -- dist/paseo-direct-1.2.4.tgz
 ```
 
 `verify` 运行类型检查和连接行为回归。干净安装验证创建独立临时 daemon，测试分发包在无 `node_modules` 时的编译、RPC、PC 设置、身份与绑定端口，并用第二个带密码的临时 daemon 验证主机转发、错误密码拒绝与清理；不会重启当前使用中的 daemon，也不会调用模型。CI 生成分发包及 SHA-256 校验文件。

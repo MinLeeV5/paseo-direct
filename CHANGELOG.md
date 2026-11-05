@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.4 — 2026-11-06
+
+- Reverify previously healthy preferred routes after the App resumes. If Relay reconnects before the relay PC's direct transport, retry the preferred route when that transport returns without treating suspension as a failed route probe.
+- Preserve real failure backoff, manual Relay pauses, and cooldown across plugin reloads. A route that still appears online is checked immediately after suspension without replacing a healthy client.
+
 ## 1.2.3 — 2026-11-06
 
 - Give every native connection probe its own client identity. Paseo 0.15.0 resumes the active session when a background probe reuses its identity, revoking that session's forwarded host channels while the origin remains online.

@@ -166,6 +166,106 @@ test("backgrounding cancels pending priority work and foregrounding resumes it w
   } finally { f.lease.dispose(); }
 });
 
+test("a healthy route resumes as soon as B reconnects even when Relay recovers first", async () => {
+  const f = fixture();
+  try {
+    await f.select(); await f.policy.check();
+    f.lease.setForeground(false);
+    f.lease.setForeground(false); // Android blur and AppState may both report suspension.
+    f.setTarget({ ...f.native });
+    f.origin({ type: "relay" });
+    f.advance(1000);
+    f.lease.setForeground(true); await f.policy.check();
+    assert.equal(f.target().connectionId, "original");
+    assert.equal(f.state().phase, "waiting");
+    assert.equal(f.state().nextAttemptAt, null, "background reconnects are not failed route probes");
+    f.origin({ type: "directTcp" }); await f.policy.check();
+    assert.equal(f.target().originServerId, "B");
+    assert.equal(f.counts().activations, 2, "no manual retry or failure cooldown is needed");
+  } finally { f.lease.dispose(); }
+});
+
+test("a previously healthy route is reverified on resume while its old client is reconnecting", async () => {
+  const f = fixture();
+  try {
+    await f.select(); await f.policy.check();
+    f.lease.setForeground(false);
+    f.setTarget({ status: "connecting" });
+    f.lease.setForeground(true); await f.policy.check();
+    assert.equal(f.target().status, "online");
+    assert.equal(f.target().originServerId, "B");
+    assert.equal(f.counts().activations, 2);
+    assert.equal(f.counts().restores, 0, "reverify the preferred route before replacing it with fallback");
+  } finally { f.lease.dispose(); }
+});
+
+test("resume checks a route that still looks online without waiting for the pre-background health interval", async () => {
+  const f = fixture();
+  try {
+    await f.select(); await f.policy.check();
+    f.lease.setForeground(false);
+    f.lease.setForeground(true); await f.policy.check();
+    assert.equal(f.counts().healthChecks, 1);
+    assert.equal(f.counts().activations, 1, "a working route keeps its current client");
+  } finally { f.lease.dispose(); }
+});
+
+test("real route failures retain their retry deadline across background and foreground", async () => {
+  const f = fixture();
+  try {
+    await f.select(); await f.policy.check();
+    f.routeAvailable(false); f.advance(20_001); await f.policy.check();
+    const retryAt = f.state().nextAttemptAt;
+    const attempts = f.counts().attempts;
+    f.lease.setForeground(false); f.routeAvailable(true);
+    f.lease.setForeground(true); await f.policy.check();
+    assert.equal(f.state().phase, "cooldown");
+    assert.equal(f.state().nextAttemptAt, retryAt);
+    assert.equal(f.counts().attempts, attempts);
+    f.advance(30_001); await f.policy.check();
+    assert.equal(f.target().originServerId, "B");
+  } finally { f.lease.dispose(); }
+});
+
+test("a failed foreground revalidation restores fallback and starts a real failure cooldown", async () => {
+  const f = fixture();
+  try {
+    await f.select(); await f.policy.check();
+    f.lease.setForeground(false); f.routeAvailable(false);
+    f.lease.setForeground(true); await f.policy.check();
+    assert.equal(f.target().connectionId, "original");
+    assert.equal(f.state().phase, "cooldown");
+    assert.equal(f.state().error, "unreachable");
+    assert.equal(f.state().nextAttemptAt, 31_000);
+    await f.policy.check();
+    assert.equal(f.counts().attempts, 2, "failed revalidation must not start a tight retry loop");
+  } finally { f.lease.dispose(); }
+});
+
+test("foreground recovery respects a manual Relay pause saved before suspension", async () => {
+  const f = fixture();
+  try {
+    await f.select(); await f.policy.check();
+    await f.preferences().update(true, values => ({ ...values, relayPauseUntil: 61_000 }));
+    f.lease.setForeground(false); f.setTarget({ ...f.native });
+    f.lease.setForeground(true); await f.policy.check();
+    assert.equal(f.target().connectionId, "original");
+    assert.equal(f.state().phase, "paused");
+    assert.equal(f.counts().attempts, 1);
+  } finally { f.lease.dispose(); }
+});
+
+test("one host's background event cannot reset route health while another foreground lease remains", async () => {
+  const f = fixture(); const other = f.policy.acquire(true);
+  try {
+    await f.select(); await f.policy.check();
+    f.lease.setForeground(false);
+    f.setTarget({ ...f.native }); await f.policy.check();
+    assert.equal(f.state().phase, "cooldown");
+    assert.equal(f.counts().activations, 1);
+  } finally { other.dispose(); f.lease.dispose(); }
+});
+
 test("changing device preference while a probe is pending prevents an obsolete route commit", async () => {
   const f = fixture(); let enter!: () => void, release!: () => void;
   const entered = new Promise<void>((r) => { enter = r; });

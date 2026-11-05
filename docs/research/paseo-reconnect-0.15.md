@@ -57,3 +57,13 @@ Mac 日志记录到手机直连的异常关闭（1006），相邻窗口没有请
 原生身份碰撞机制已经复现，并与这次手机故障时间高度吻合；但手机报告只保留了 `network` 类别和通道关闭次数，没有保存 `permission_denied` 原码。因此不能据此认定所有手机重连都由同一原因造成，修复后的持续前台、文件查看与 workspace 切换仍待真机确认。
 
 官方参考：[websocket-server.ts](https://github.com/getpaseo/paseo/blob/v0.15.0/packages/server/src/server/websocket-server.ts)、[session.ts](https://github.com/getpaseo/paseo/blob/v0.15.0/packages/server/src/server/session.ts)、[connected-hosts/session.ts](https://github.com/getpaseo/paseo/blob/v0.15.0/packages/server/src/server/connected-hosts/session.ts)。原始报告、身份碰撞对照与修复验证保存在本地忽略目录，不随分发包公开。
+
+## 后台恢复：Relay 先连接触发中继误退避
+
+2026-11-06，用户确认 Android 回到前台后，连接列表偶尔显示“Relay 更快”，需要点击“重试中继”才能恢复。更新前保留的 Android 手动报告仍为 1.2.2，未含增强运行时历史，因此本次能确认代码路径和对照复现，尚不能逐次归因用户真机上的恢复事件。
+
+原生 0.15.0 控制器在活动路径不可用时选择已验证的最快可用路径；健康路径的延迟择优另需至少 40ms 优势且连续 3 次探测。后台恢复时手机到 B、B 到 A 与 A 的 Relay 分别恢复，Relay 先在线并不证明 B 的中继不可用或持续更慢。插件原有策略却将“上次已通过中继、当前路径变为 Relay 或尚未在线”直接计为一次失败，从此刻开始等待 30 秒，连续失败最长等待 300 秒。B 随后直连恢复也只能等到冷却结束。未切换路径的旧客户端还可能沿用后台前的 20 秒健康检查间隔。
+
+1.2.4（先以本地构建 1.2.4-dev.1 验证）在所有插件实例都收到后台状态时，撤销已验证健康中继的旧成功样本与健康检查期限。回前台立即重新验证；B 的直连尚未就绪则继续使用可用的原有连接，B 直连恢复后即可验证并交接中继。真正探测失败、此前已存在的故障冷却、手动选择 Relay 的 60 秒暂停和插件重载均保留原有规则。单个插件实例失焦而另一个仍在前台时，不重置共享策略。
+
+三个新增场景在修改前失败，修改后通过。另用官方 v0.15.0 的原版 HostRuntimeController、插件实际 PrivateBridge 与受控传输模拟相同先后顺序：旧策略最终为 Relay / cooldown，新策略为 routed / online，恢复过程中没有假故障期限。受控传输不是手机网络测量；原始脚本、修复前失败输出和结果保存在忽略目录 `test-results/reconnect-resume-20261106/`。验证真实手机时需保证提供插件的各 PC 都加载同一修复构建，并完全退出后重开 App，以重建全局共享的选路策略；只更新其中一台 PC 不能保证手机使用的新策略由该 PC 提供。
