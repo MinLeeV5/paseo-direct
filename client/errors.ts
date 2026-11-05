@@ -10,6 +10,8 @@ export class DirectError extends Error {
 export function publicError(error: unknown): ErrorCode {
   if (error instanceof DirectError) return error.code;
   if (error && typeof error === "object" && "authFailureReason" in error && error.authFailureReason) return "authentication";
+  if (error && typeof error === "object" && "name" in error && error.name === "DaemonAuthenticationError" &&
+    "reason" in error && (error.reason === "password_required" || error.reason === "incorrect_password")) return "authentication";
   return "unreachable";
 }
 

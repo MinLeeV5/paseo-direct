@@ -3,6 +3,8 @@ import type { DevicePreferences, ManagedConnection } from "../shared/settings";
 import { DevicePreferenceStore, type PreferenceStorage } from "./preferences";
 import { bounded, DirectError, ensureActive } from "./errors";
 import { installTimelineConnectionSync } from "./timeline";
+import { runtimeDiagnostics, type DiagnosticLease } from "./diagnostics";
+import { installIsolatedProbeConnector, type ProbeDependencies } from "./probes";
 
 export interface Connection { id: string; type: string; endpoint?: string; useTls?: boolean; originServerId?: string }
 export interface Host { serverId: string; label: string; password?: string; connections: Connection[] }
@@ -11,7 +13,7 @@ export interface ProbeClient {
   measureLatency(options: { timeoutMs: number }): Promise<number>;
   livenessPing?(options: { timeoutMs: number }): Promise<number>;
   getConnectionState(): { status: string };
-  getLastServerInfoMessage(): { serverId: string; version?: string } | null;
+  getLastServerInfoMessage(): { serverId: string; version?: string; hostname?: string | null } | null;
   invokePluginRpc?(pluginId: string, method: string, input: unknown): Promise<unknown>;
 }
 export interface RuntimeSnapshot {
@@ -32,7 +34,7 @@ export interface PrivateStore {
   getSnapshot(serverId: string): RuntimeSnapshot | null;
   subscribe(serverId: string, listener: () => void): () => void;
   subscribeAll?(listener: () => void): () => void;
-  deps: { connectToDaemon(input: { host: Host; connection: Connection; timeoutMs: number }): Promise<{ client: ProbeClient; serverId: string }> };
+  deps: ProbeDependencies;
   controllers: Map<string, RuntimeController>;
   storage: PreferenceStorage;
   upsertDirectConnection(input: { serverId: string; endpoint: string; useTls: boolean; existingClient?: ProbeClient }): Promise<unknown>;
@@ -75,6 +77,9 @@ export class PrivateBridge {
       typeof store.removeConnection !== "function" || typeof store.deps?.connectToDaemon !== "function" ||
       typeof store.controllers?.get !== "function" || typeof store.storage?.getItem !== "function" ||
       typeof store.storage?.setItem !== "function") throw new DirectError("unsupported");
+    if (!installIsolatedProbeConnector(store.deps, id => store.getSnapshot(id)?.client?.getConnectionState().status === "connected")) {
+      throw new DirectError("unsupported");
+    }
     installTimelineConnectionSync(store);
   }
   static fromGlobal(): PrivateBridge {
@@ -134,6 +139,7 @@ export class PrivateBridge {
   routeHosts(): { serverId: string; label: string }[] {
     return this.store.getHosts().map(({ serverId, label }) => ({ serverId, label }));
   }
+  observeDiagnostics(foreground: boolean): DiagnosticLease { return runtimeDiagnostics(this.store).acquire(foreground); }
 
   async invoke(serverId: string, method: string, input: unknown): Promise<unknown> {
     this.host(serverId);

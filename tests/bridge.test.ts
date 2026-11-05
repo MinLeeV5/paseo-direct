@@ -29,7 +29,13 @@ function fixture(serverId = "pc-a", version: string | undefined = "0.13.2") {
     subscribe: () => () => {}, controllers: new Map([["pc-a", controller]]),
     storage: { getItem: async () => JSON.stringify([{ serverId: "pc-a", password: "test-only-password", connections: host.connections }]), setItem: async () => {} },
     removeConnection: async () => {},
-    deps: { connectToDaemon: async (input) => { seenPassword = input.host.password; return { client, serverId }; } },
+    deps: {
+      createClient: (input) => {
+        seenPassword = input.host.password;
+        return Object.assign(client, { connect: async () => {}, setReconnectEnabled: () => {} });
+      },
+      connectToDaemon: async () => { throw new Error("The original connector must not be called"); },
+    },
     upsertDirectConnection: async (input) => {
       saves++; savedClient = input.existingClient;
       host.connections.push({ id: `direct:${input.endpoint}`, type: "directTcp", endpoint: input.endpoint });

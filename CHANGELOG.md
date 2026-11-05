@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3 — 2026-11-06
+
+- Give every native connection probe its own client identity. Paseo 0.15.0 resumes the active session when a background probe reuses its identity, revoking that session's forwarded host channels while the origin remains online.
+- Reuse the native client factory, authentication, transport configuration and promotion. Keep native timeout defaults and reject offline routed origins immediately; release failed, expired and late connections without delaying the probe deadline.
+- Keep bounded, passive connection history in memory for manually submitted diagnostics: disconnect categories, client replacements, heartbeat latency, foreground delays and message-type counters. No automatic uploads or message/file contents are collected.
+
 ## 1.2.2 — 2026-11-05
 
 - Prevent stale native connection probes from replacing a newly verified direct or forwarded connection. Serialize handoff through the native probe slot, including asynchronous disposal of the previous connection, and recheck device preferences before activation.
