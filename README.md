@@ -34,7 +34,7 @@ paseo plugin install /absolute/path/to/paseo-direct
 paseo plugin reload paseo-direct
 ```
 
-分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.4)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；官方插件目录版本以审核后的记录为准。维护者发布流程见 [发布说明](docs/releasing.md)。
+分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.4)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；[官方插件目录](https://paseo.sh/plugins/minleev5/direct)的版本以审核后的记录为准。目录 ID 为 `minleev5/direct`，本机运行时的插件 ID 为 `paseo-direct`；Git 目录更新需要单独提交审核，不会自动跟随仓库的新标签。维护者发布流程见 [发布说明](docs/releasing.md)。
 
 ## 使用
 
@@ -68,7 +68,7 @@ PC 的 TCP 端口必须能从手机访问。插件不会修改监听、防火墙
 
 ## 诊断与数据
 
-默认不上传诊断。展开“诊断与事件”并点击 **发送诊断到 PC**，才会向当前 PC 发送候选地址、连接状态、近期事件与验证计数；不包含主机密码或配对凭据。PC 内存最多保留 12 台设备的最近报告，插件日志也会保留报告，随 Paseo 日志策略处理。
+默认不上传诊断。设备在内存中保留有数量上限的被动连接历史，包括断开类别、连接变化、心跳耗时、前台延迟和消息类型计数，不收集消息或文件正文。展开“诊断与事件”并点击 **发送诊断到 PC**，才会向当前 PC 发送候选地址、连接状态、近期事件、验证计数、插件版本与连接历史；不包含主机密码或配对凭据。PC 内存最多保留 12 台设备的最近报告，插件日志也会保留报告，随 Paseo 日志策略处理。
 
 ```sh
 npm ci --ignore-scripts

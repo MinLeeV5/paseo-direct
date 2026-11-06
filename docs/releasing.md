@@ -29,3 +29,21 @@ paseo plugin install /absolute/path/to/package
 - Paseo 插件目录：按官方 [Publishing](https://paseo.sh/docs/plugins/publishing) 提交 listing，填写英文介绍、兼容版本、来源、图标、截图及隐私说明。此项目的中英文 OVERVIEW 可直接作为审核素材。
 
 CI 仅验证和上传构建 artifact，不包含自动发布凭据。首次公开发布前还应确认 repository 访问权限和来源地址。
+
+## 更新已收录的 Git 插件
+
+官方目录记录为 [`plugins/minleev5/direct.json`](https://github.com/getpaseo/plugins/blob/main/plugins/minleev5/direct.json)，安装 ID 为 `minleev5/direct`。Git 插件的新标签不会自动触发目录更新；每次发布后都需要按官方 [手动 Git 更新流程](https://github.com/getpaseo/plugins#submit-a-plugin) 提交。
+
+1. 确认公开稳定版、发布说明和验证记录。同步英文 `OVERVIEW.md` 与 `OVERVIEW.zh-CN.md`，说明当前配置步骤、升级要求、数据去向与验证边界；目录介绍不放安装命令或 changelog。
+2. 从官方 `getpaseo/plugins` 的最新 `main` 创建分支，通过自己的 fork 提交 PR。已有记录可直接更新，无需重复提交首次收录申请。
+3. 将 `artifact.commit` 与 `repository.commit` 固定到同一个公开、可达的 40 位提交号。若保留 `artifact.tag`，必须确认标签仍指向该提交。发布后补充说明的提交可沿用相同运行版本，以其精确提交号送审并省略标签；不要移动已发布的版本标签。
+4. 保留原有 ID、来源、分类、提交者、`submittedAt` 与 `publishedAt`。`reviewedAt` 留待官方审核更新。作者 OVERVIEW 优先于目录里的说明副本，应直接更新作者文件。
+5. 在目录仓库运行可信验证脚本：
+
+   ```sh
+   node scripts/validate.ts --online --changed --base origin/main
+   ```
+
+   此命令针对已提交到分支的改动。macOS 若临时目录符号链接触发路径检查，可使用 `TMPDIR=/private/tmp`。目录审核遵循官方 [Review policy](https://github.com/getpaseo/plugins/blob/main/REVIEW.md)，静态检查插件内容，不执行插件或依赖代码；作者自己的发布 CI 与安装验证另行记录。
+
+6. PR 正文简述插件名、版本变化与待审核状态，把功能变化、精确提交、发布 / 对比 / 验证链接和检查结果放入折叠详情。提交后核对官方 CI 与审核反馈；只有审核合并并发布后，目录安装才使用新版本。
