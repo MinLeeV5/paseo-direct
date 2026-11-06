@@ -4,23 +4,25 @@ Paseo 的前台直连与主机中继管理插件。手机自动获取 PC 地址�
 
 ![Paseo Direct](assets/screenshot.png)
 
-**版本 1.2.4，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 修复后台恢复时 Relay 先连接导致的自动中继误退避。连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
+**版本 1.3.0，支持 Paseo 0.13.0 及以上版本，不设版本上限。** 全新原生界面按连接、中继、设置分组，跟随 Paseo 主题，展示实际连接路径。连接管理依赖 App 私有接口，中继需宿主与 App 支持主机转发；运行时检查所需能力，接口缺失时停止操作。开发机制与边界见 [调研](docs/research/paseo-direct-feasibility.md)。
+
+新版界面的截图、交互说明与验收见 [设计记录](docs/design/2026-11-06-native-redesign.md)。
 
 ## 安装
 
 在需要直连或充当中继的 PC 上，先启用 Paseo 插件功能并完成手机的 Relay 配对，再安装稳定版：
 
 ```sh
-paseo plugin add git:MinLeeV5/paseo-direct --ref v1.2.4
+paseo plugin add git:MinLeeV5/paseo-direct --ref v1.3.0
 ```
 
 已通过 Git 安装旧版的 B 可直接升级：
 
 ```sh
-paseo plugin update paseo-direct --ref v1.2.4
+paseo plugin update paseo-direct --ref v1.3.0
 ```
 
-升级到 1.2.4 后，请将提供此插件的各 PC 更新到同一版本，再将手机 Paseo 完全退出并重新打开一次，以重建共享选路策略和可能卡住的消息同步状态。后台恢复及切换 workspace 后“正在更新消息”的排查和修复见 [分析记录](docs/research/paseo-reconnect-0.15.md)。
+升级后，请将提供此插件的各 PC 更新到同一版本，再将手机 Paseo 完全退出并重新打开一次，以重建共享选路策略和可能卡住的消息同步状态。后台恢复及切换 workspace 后“正在更新消息”的排查和修复见 [分析记录](docs/research/paseo-reconnect-0.15.md)。
 
 也可从本地源码目录安装：
 
@@ -34,11 +36,13 @@ paseo plugin install /absolute/path/to/paseo-direct
 paseo plugin reload paseo-direct
 ```
 
-分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.2.4)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；[官方插件目录](https://paseo.sh/plugins/minleev5/direct)的版本以审核后的记录为准。目录 ID 为 `minleev5/direct`，本机运行时的插件 ID 为 `paseo-direct`；Git 目录更新需要单独提交审核，不会自动跟随仓库的新标签。维护者发布流程见 [发布说明](docs/releasing.md)。
+分发包与校验文件见 [GitHub Release](https://github.com/MinLeeV5/paseo-direct/releases/tag/v1.3.0)，解压后同样安装其中的 `package` 目录。Git 安装可直接指定此版本；[官方插件目录](https://paseo.sh/plugins/minleev5/direct)的版本以审核后的记录为准。目录 ID 为 `minleev5/direct`，本机运行时的插件 ID 为 `paseo-direct`；Git 目录更新需要单独提交审核，不会自动跟随仓库的新标签。维护者发布流程见 [发布说明](docs/releasing.md)。
 
 ## 使用
 
 在手机侧边栏打开 **Paseo Direct**，也可在此 PC 的插件设置中打开。手机端前台默认开启自动探测，网页和桌面默认关闭。请允许 Paseo 的本地网络访问权限。
+
+新版按 **连接 / 中继 / 设置** 分组，跟随 Paseo 的明暗主题与原生控件。连接页显示当前路径、状态、探测操作和地址；中继页管理目标；设置页集中设备偏好、PC 共享配置与诊断。切换入口保留未提交的地址和名称草稿，离开中继页或关闭添加弹窗会清空密码。
 
 - **优先直连**：验证地址可达且属于已配对 PC 后，将同一个连接交给 Paseo 保存和激活。
 - **由 Paseo 选择**：验证并保存新地址，由 Paseo 的延迟策略决定实际连接；点击单个地址的“连接”可立即使用它。
@@ -48,13 +52,13 @@ paseo plugin reload paseo-direct
 
 **自动中继**有独立的设备偏好：在 B 的目标列表开启“自动优先此中继”，或在 A 的页面选择“优先使用的中继电脑”。手机到 B 的直连与 B 到 A 的通道可用时自动选择该路由；任一段失效时验证并恢复 A 已保存的原有连接。原有连接也不可达时继续重试，不保证离线目标可以连接。需先在手机保留 A 的 Relay 或直连配对。
 
-“本设备设置”中的开关、策略、间隔、超时、语言、排除列表和插件地址归属按 **当前设备 × PC** 保存，重启 App 后保留。连接计数与事件是本次 App 会话记录。
+“设置 → 本设备”中的策略、间隔、超时、语言，以及连接页的自动探测开关、排除列表和插件地址归属，按 **当前设备 × PC** 保存，重启 App 后保留。连接计数与事件是本次 App 会话记录。
 
-“PC 地址配置”是官方 host settings，供连接此 PC 的所有设备共享：可关闭地址发现、忽略 VPN 等网卡，或补充 DNS / IPv4 / IPv6 地址。支持 `host:port`、`ws://host:port`、`wss://host:port`，每行一个；不接受密码、任意路径及仅手机本机可用的地址。自动发现只提取当前 daemon 实际 TCP 监听中的 IPv4 地址，最多 16 个候选。
+“设置 → PC 地址配置”是官方 host settings，供连接此 PC 的所有设备共享：可关闭地址发现、忽略 VPN 等网卡，或补充 DNS / IPv4 / IPv6 地址。支持 `host:port`、`ws://host:port`、`wss://host:port`，每行一个；不接受密码、任意路径及仅手机本机可用的地址。自动发现只提取当前 daemon 实际 TCP 监听中的 IPv4 地址，最多 16 个候选。
 
 ## 通过另一台 PC 中继
 
-当 B 已运行 Paseo 且登录 VPN，手机可先直连 B，再经 B 访问只有 VPN 内可达的 A。在 **B 的 Paseo Direct → 通过此 PC 中继** 中保存 A 的映射地址（例如 `192.0.2.42:16767`），按需单独填写 A 的 Paseo 密码。等待 B 连接成功，开启目标的 **自动优先此中继**，再在侧边栏选择 A；也可点击“使用此中继”仅手动切换一次。
+当 B 已运行 Paseo 且登录 VPN，手机可先直连 B，再经 B 访问只有 VPN 内可达的 A。在 **B 的 Paseo Direct → 中继 → 添加目标** 中保存 A 的映射地址（例如 `192.0.2.42:16767`），按需单独填写 A 的 Paseo 密码。等待目标显示“在线”，开启 **自动优先此中继**，再在侧边栏选择 A；也可点击“使用此中继”仅手动切换一次。
 
 主机转发自 1.1.0 提供，自动优先与回退自 1.2.0 提供，复用 Paseo 的主机转发，不需要手机登录 VPN 或在 B 上另开代理端口。目标由 B 的原生主机配置持久保存并向获准使用 B 的客户端共享；自动优先来源按手机与目标保存，一个目标只选择一个来源。完整配置步骤见 [VPN 电脑中继说明](docs/forwarding.md)。
 
@@ -68,7 +72,7 @@ PC 的 TCP 端口必须能从手机访问。插件不会修改监听、防火墙
 
 ## 诊断与数据
 
-默认不上传诊断。设备在内存中保留有数量上限的被动连接历史，包括断开类别、连接变化、心跳耗时、前台延迟和消息类型计数，不收集消息或文件正文。展开“诊断与事件”并点击 **发送诊断到 PC**，才会向当前 PC 发送候选地址、连接状态、近期事件、验证计数、插件版本与连接历史；不包含主机密码或配对凭据。PC 内存最多保留 12 台设备的最近报告，插件日志也会保留报告，随 Paseo 日志策略处理。
+默认不上传诊断。设备在内存中保留有数量上限的被动连接历史，包括断开类别、连接变化、心跳耗时、前台延迟和消息类型计数，不收集消息或文件正文。在“设置”中展开“诊断与事件”并点击 **发送诊断到 PC**，才会向当前 PC 发送候选地址、连接状态、近期事件、验证计数、插件版本与连接历史；不包含主机密码或配对凭据。PC 内存最多保留 12 台设备的最近报告，插件日志也会保留报告，随 Paseo 日志策略处理。
 
 ```sh
 npm ci --ignore-scripts
@@ -84,7 +88,7 @@ paseo plugin logs paseo-direct
 npm ci --ignore-scripts
 npm run verify
 npm run release:pack
-npm run verify:daemon -- dist/paseo-direct-1.2.4.tgz
+npm run verify:daemon -- dist/paseo-direct-1.3.0.tgz
 ```
 
 `verify` 运行类型检查和连接行为回归。干净安装验证创建独立临时 daemon，测试分发包在无 `node_modules` 时的编译、RPC、PC 设置、身份与绑定端口，并用第二个带密码的临时 daemon 验证主机转发、错误密码拒绝与清理；不会重启当前使用中的 daemon，也不会调用模型。CI 生成分发包及 SHA-256 校验文件。

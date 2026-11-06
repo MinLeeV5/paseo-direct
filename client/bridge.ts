@@ -42,6 +42,7 @@ export interface PrivateStore {
 }
 export interface DirectConnection { id: string; endpoint: string; useTls: boolean }
 export interface ConnectionStatus {
+  hostLabel?: string;
   status: string; type: string | null; endpoint: string | null; connectionId: string | null;
   relaySaved: boolean; directSaved: string[];
   directConnections?: DirectConnection[]; activeTls?: boolean | null; daemonVersion?: string | null;
@@ -119,6 +120,7 @@ export class PrivateBridge {
       id: c.id, endpoint: c.endpoint!, useTls: c.useTls ?? false,
     }));
     return {
+      hostLabel: host.label,
       status: snapshot?.connectionStatus ?? "offline", type: active?.type ?? null,
       endpoint: active?.endpoint ?? null, connectionId: active?.id ?? null,
       relaySaved: host.connections.some((c) => c.type === "relay"), directSaved: directConnections.map((c) => c.endpoint),

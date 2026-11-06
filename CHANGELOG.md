@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 — 2026-11-06
+
+- Redesign the interface around Connection, Relay and Settings, using Paseo’s theme, native controls and a diagram of the active connection path.
+- Put current status, checks and address actions on the connection page; manage relay targets in separate cards and add targets with Paseo’s native modal.
+- Keep address and name drafts when changing tabs, clear target passwords when closing the form or leaving Relay, and show accessible feedback for errors and saved changes.
+- Refresh English / Simplified Chinese guidance and interface screenshots.
+
 ## 1.2.4 — 2026-11-06
 
 - Reverify previously healthy preferred routes after the App resumes. If Relay reconnects before the relay PC's direct transport, retry the preferred route when that transport returns without treating suspension as a failed route probe.

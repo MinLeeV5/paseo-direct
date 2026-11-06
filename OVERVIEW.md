@@ -12,6 +12,8 @@ After upgrading, update every PC that provides this plugin to the same version, 
 
 The PC must expose a TCP endpoint reachable from your device. The plugin reads the actual daemon listener; it does not change the listener, firewall, port forwarding or relay configuration.
 
+The interface follows Paseo’s theme and has three tabs: **Connection** shows the current path, status, checks and addresses; **Relay** manages target PCs; **Settings** contains device preferences, shared PC address settings and diagnostics. Address and name drafts survive tab changes. Closing the target form or leaving Relay clears its password.
+
 ## Choose how to connect
 
 **Prefer direct** saves and activates a verified connection. **Let Paseo choose** saves new verified addresses and lets Paseo’s latency policy choose the transport. You can also connect to a specific address, use relay for 60 seconds, and remove inactive addresses added by this plugin.
@@ -20,7 +22,7 @@ Device preferences persist separately for each PC. Shared PC settings support ig
 
 ## Use a PC as a relay
 
-Open **Use this PC as a relay** on a VPN-connected Paseo PC and save a target address reachable from that PC. Pair the phone with both PCs, keep an original connection to the target, and enable **Automatically prefer this relay**. The app verifies the direct link to the relay PC and the forwarded target connection, automatically returns to the target's original Paseo connections when either hop fails, and retries the preferred route with backoff. The target PC does not need this plugin.
+Open **Relay → Add target** on a VPN-connected Paseo PC and save a target address reachable from that PC. Pair the phone with both PCs, keep an original connection to the target, and enable **Automatically prefer this relay**. The app verifies the direct link to the relay PC and the forwarded target connection, automatically returns to the target's original Paseo connections when either hop fails, and retries the preferred route with backoff. The target PC does not need this plugin.
 
 The preference is saved only on the current device, separately for each target. It runs in the foreground even when the plugin page is closed. An online relay PC using public Relay is not treated as a direct path. Manual relay or direct selection pauses automatic routing for 60 seconds. If all original paths are also unavailable, Paseo and the plugin keep retrying.
 
@@ -36,7 +38,7 @@ The plugin reads PC network interfaces and the daemon’s runtime listener. On t
 
 The device keeps a bounded connection history in memory: disconnect categories, connection changes, heartbeat timing, foreground delays and message-type counts. It does not collect message or file contents, passwords or pairing credentials.
 
-Diagnostics are sent only when you press **Send diagnostics to PC**. They include candidate addresses, connection state, recent events, plugin version and the connection history. They go to the currently connected PC, which keeps up to 12 latest device reports in memory and also writes them to plugin logs. There are no automatic diagnostic uploads.
+Open **Settings → Diagnostics and events** to review activity. Diagnostics are sent only when you press **Send diagnostics to PC**. They include candidate addresses, connection state, recent events, plugin version and the connection history. They go to the currently connected PC, which keeps up to 12 latest device reports in memory and also writes them to plugin logs. There are no automatic diagnostic uploads.
 
 ## Compatibility
 
